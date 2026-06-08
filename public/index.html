@@ -1,0 +1,3106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>合同管理系统</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f1ea;--surface:#fdfcf8;--surface2:#edeae0;--border:#ddd8cc;--accent:#2a7a52;--al:rgba(42,122,82,0.10);--am:rgba(42,122,82,0.20);--text:#1c2a1f;--text2:#4a6055;--text3:#8a9e92;--red:#b83232;--rl:rgba(184,50,50,0.10);--orange:#b85a1a;--ol:rgba(184,90,26,0.10);--yellow:#8a6a00;--yl:rgba(138,106,0,0.10);--blue:#1a5a8a;--bl:rgba(26,90,138,0.10);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden;font-size:14px;}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.logo{padding:22px 20px 18px;border-bottom:1px solid var(--border);}
+.logo-tag{font-size:10px;font-weight:700;letter-spacing:3px;color:var(--accent);font-family:'JetBrains Mono',monospace;}
+.logo-name{font-size:16px;font-weight:700;margin-top:3px;}
+.nav{padding:12px 10px;flex:1;overflow-y:auto;}
+.nav-section{font-size:10px;letter-spacing:2px;color:var(--text3);font-weight:600;padding:12px 8px 4px;text-transform:uppercase;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;margin-bottom:1px;border-left:2px solid transparent;user-select:none;}
+.nav-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item.active{background:var(--al);color:var(--accent);font-weight:600;border-left-color:var(--accent);}
+.nav-item .ni{font-size:14px;width:18px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;font-family:'JetBrains Mono',monospace;display:none;}
+.sidebar-footer{padding:12px 10px;border-top:1px solid var(--border);}
+.user-card{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;}
+.user-card:hover{background:var(--surface2);}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+.user-name{font-size:13px;font-weight:600;}.user-role{font-size:11px;color:var(--text3);}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.topbar-title{font-size:17px;font-weight:700;}
+.search-box{flex:1;max-width:320px;margin-left:16px;display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 12px;}
+.search-box input{background:none;border:none;outline:none;color:var(--text);font-size:13px;font-family:'Noto Sans SC',sans-serif;flex:1;}
+.search-box input::placeholder{color:var(--text3);}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center;}
+.btn{padding:7px 14px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:'Noto Sans SC',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:5px;}
+.btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:#235f40;}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border);}.btn-ghost:hover{background:var(--border);color:var(--text);}
+.btn-danger{background:var(--rl);color:var(--red);border:1px solid rgba(184,50,50,0.2);}.btn-danger:hover{background:var(--red);color:#fff;}
+.content{flex:1;overflow-y:auto;padding:22px 24px;}
+.content::-webkit-scrollbar{width:5px;}.content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.page{display:none;}.page.active{display:block;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;}
+.card-title{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.card-link{font-size:12px;color:var(--accent);cursor:pointer;font-weight:400;}.card-link:hover{text-decoration:underline;}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;}
+.stat-card:hover{border-color:var(--accent);}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;}
+.stat-card.c-green::before{background:var(--accent);}.stat-card.c-red::before{background:var(--red);}.stat-card.c-yellow::before{background:var(--yellow);}
+.stat-label{font-size:12px;color:var(--text3);margin-bottom:6px;}
+.stat-value{font-size:30px;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1;}
+.stat-value.c-green{color:var(--accent);}.stat-value.c-red{color:var(--red);}.stat-value.c-yellow{color:var(--yellow);}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:6px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+.alert-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);}
+.alert-item:last-child{border-bottom:none;}
+.alert-dot{width:7px;height:7px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+.alert-name{font-size:13px;font-weight:500;}.alert-info{font-size:12px;color:var(--text3);margin-top:2px;}
+.alert-date{margin-left:auto;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text3);flex-shrink:0;}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.table-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.filter-tabs{display:flex;gap:4px;flex-wrap:wrap;}
+.ftab{padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;color:var(--text3);border:1px solid transparent;transition:all .15s;font-weight:500;}
+.ftab:hover{background:var(--surface2);color:var(--text);}
+.ftab.active{color:var(--accent);background:var(--al);border-color:var(--am);}
+table{width:100%;border-collapse:collapse;}
+thead th{padding:9px 18px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;background:var(--surface2);border-bottom:1px solid var(--border);}
+tbody tr{border-bottom:1px solid rgba(0,0,0,.04);transition:background .1s;}
+tbody tr:hover{background:var(--al);}
+td{padding:12px 18px;font-size:13px;vertical-align:middle;}
+.cn{font-weight:500;color:var(--accent);cursor:pointer;}.cn:hover{text-decoration:underline;}
+.cid{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:2px;}
+.ct{font-size:12px;color:var(--text3);}.cd{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text3);}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;}
+.b-reviewing{background:var(--yl);color:var(--yellow);}.b-reviewing::before{background:var(--yellow);}
+.b-signing{background:var(--bl);color:var(--blue);}.b-signing::before{background:var(--blue);}
+.b-active{background:var(--al);color:var(--accent);}.b-active::before{background:var(--accent);}
+.b-expiring{background:var(--ol);color:var(--orange);}.b-expiring::before{background:var(--orange);}
+.b-expired{background:var(--rl);color:var(--red);}.b-expired::before{background:var(--red);}
+.act-btns{display:flex;gap:5px;}
+.act-btn{padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:'Noto Sans SC',sans-serif;transition:all .1s;}
+.act-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.act-btn.del:hover{background:var(--red);color:#fff;border-color:var(--red);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.fg-full{grid-column:1/-1;}
+.form-label{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:5px;display:block;}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;transition:border-color .15s;}
+.form-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--al);}
+textarea.form-input{resize:vertical;}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px);}
+.overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:560px;max-height:85vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;}
+.modal-close{cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;}.modal-close:hover{background:var(--surface2);}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:36px;text-align:center;cursor:pointer;transition:all .2s;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--al);}
+.progress-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:8px;}
+.progress-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .4s ease;}
+.final-toggle{display:flex;gap:10px;margin-top:5px;}
+.ftoggle-btn{flex:1;padding:9px;border-radius:7px;border:1.5px solid var(--border);cursor:pointer;text-align:center;font-size:13px;font-weight:500;transition:all .15s;background:var(--surface2);color:var(--text2);}
+.ftoggle-btn.selected{border-color:var(--accent);background:var(--al);color:var(--accent);}
+.split-layout{display:flex;gap:16px;height:calc(100vh - 130px);}
+.split-left{width:240px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;}
+.split-left-header{padding:14px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.split-left-title{font-size:13px;font-weight:600;}
+.split-left-body{flex:1;overflow-y:auto;padding:8px;}
+.split-right{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;}
+.list-item{padding:9px 10px;border-radius:7px;cursor:pointer;transition:all .15s;border-left:2px solid transparent;margin-bottom:2px;display:flex;align-items:center;gap:9px;}
+.list-item:hover{background:var(--surface2);}
+.list-item.active{background:var(--al);border-left-color:var(--accent);}
+.list-item-name{font-size:13px;font-weight:500;}.list-item-sub{font-size:11px;color:var(--text3);margin-top:1px;}
+.placeholder-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text3);flex:1;padding:40px;text-align:center;}
+.placeholder-icon{font-size:36px;}.placeholder-text{font-size:14px;font-weight:500;}
+.company-card{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:15px;cursor:pointer;transition:all .15s;}
+.company-card:hover{border-color:var(--accent);background:var(--al);}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.cat-card{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:14px;cursor:pointer;transition:all .15s;position:relative;}
+.cat-card:hover{border-color:var(--accent);}
+.cat-card:hover .cat-actions{opacity:1;}
+.cat-actions{position:absolute;top:7px;right:7px;display:flex;gap:3px;opacity:0;transition:opacity .15s;}
+.cat-action-btn{width:22px;height:22px;border-radius:5px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;}
+.cat-action-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.cat-action-btn.del:hover{background:var(--red);border-color:var(--red);}
+.icon-picker{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;}
+.icon-opt{width:32px;height:32px;border-radius:6px;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;transition:all .1s;}
+.icon-opt:hover,.icon-opt.selected{border-color:var(--accent);background:var(--al);}
+.ver-final{background:var(--al);border:1.5px solid var(--am);border-radius:9px;padding:13px 15px;display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+.ver-history-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 11px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);font-size:12px;color:var(--text2);margin-bottom:6px;}
+.ver-history-toggle:hover{background:var(--border);}
+.ver-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;display:flex;align-items:center;gap:11px;margin-bottom:6px;}
+.ver-del-btn{width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text3);font-size:12px;margin-left:auto;flex-shrink:0;}
+.ver-del-btn:hover{background:var(--red);color:#fff;border-color:var(--red);}
+.tl-wrap{position:relative;padding-left:18px;}
+.tl-wrap::before{content:'';position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--border);}
+.tl-item{position:relative;padding-bottom:16px;padding-left:14px;}
+.tl-dot{position:absolute;left:-13px;top:5px;width:10px;height:10px;border-radius:50%;border:2px solid;}
+.tl-dot.done{background:var(--accent);border-color:var(--accent);}
+.tl-dot.current{background:var(--blue);border-color:var(--blue);box-shadow:0 0 0 3px var(--bl);}
+.tl-dot.pending{background:var(--surface2);border-color:var(--border);}
+.tl-label{font-size:13px;font-weight:500;}.tl-date{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:2px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-day-label{text-align:center;font-size:11px;color:var(--text3);padding:3px;font-weight:600;}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12px;border-radius:6px;cursor:pointer;color:var(--text2);font-family:'JetBrains Mono',monospace;position:relative;}
+.cal-day:hover{background:var(--surface2);}
+.cal-day.today{color:var(--accent);font-weight:700;background:var(--al);}
+.cal-day.has-event::after{content:'';position:absolute;bottom:2px;width:4px;height:4px;border-radius:50%;background:var(--red);}
+.section-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;padding-bottom:8px;border-top:none;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+</style>
+<!-- Firebase SDK 已移除 — 数据通过 Node.js 后端 /api/* 读写 -->
+</head>
+<body>
+<aside class="sidebar">
+  <div class="logo"><div class="logo-tag">CMS</div><div class="logo-name">合同管理</div></div>
+  <nav class="nav">
+    <div class="nav-section">主菜单</div>
+    <div class="nav-item active" data-page="dashboard"><span class="ni">📊</span>控制台</div>
+    <div class="nav-item" data-page="contracts"><span class="ni">📄</span>合同列表</div>
+    <div class="nav-item" data-page="upload"><span class="ni">⬆</span>上传合同</div>
+    <div class="nav-item" data-page="entities"><span class="ni">🏢</span>公司主体</div>
+    <div class="nav-item" data-page="templates"><span class="ni">📁</span>合同模板</div>
+    <div class="nav-section">跟踪</div>
+    <div class="nav-item" data-page="timeline"><span class="ni">🔄</span>审批流程</div>
+    <div class="nav-item" data-page="calendar"><span class="ni">📅</span>到期日历<span class="nav-badge" id="badge-expiring"></span></div>
+    <div class="nav-item" data-page="alerts"><span class="ni">🔔</span>提醒管理<span class="nav-badge" id="badge-urgent"></span></div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="avatar">R</div>
+      <div><div class="user-name">Rebecca</div><div class="user-role">Paralegal</div></div>
+    </div>
+  </div>
+</aside>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">控制台</div><div id="sync-status" style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;margin-left:8px"></div>
+    <div class="search-box"><span style="color:var(--text3)">🔍</span><input type="text" id="searchInput" placeholder="搜索合同名称、对方当事人…"></div>
+    <div class="topbar-right">
+      <button class="btn btn-ghost" onclick="openDriveImport()" title="从Google Drive导入合同">📂 Drive 导入</button>
+      <button class="btn btn-ghost" onclick="exportJSON()" title="导出完整数据备份（JSON）">📤 导出备份</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('importJSONInput').click()" title="从JSON备份文件恢复数据">📥 导入备份</button>
+      <input type="file" id="importJSONInput" accept=".json" style="display:none" onchange="importJSON(this)">
+      <button class="btn btn-ghost" onclick="exportExcel()">⬇ Excel</button>
+      <button class="btn btn-primary" onclick="navTo('upload')">＋ 上传合同</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card c-green" onclick="navTo('contracts')"><div class="stat-label">合同总数</div><div class="stat-value c-green" id="db-total">0</div><div class="stat-sub" id="db-total-sub">本月暂无新增</div></div>
+        <div class="stat-card c-green" onclick="navTo('contracts','active')"><div class="stat-label">执行中</div><div class="stat-value c-green" id="db-active">0</div><div class="stat-sub">正常履约</div></div>
+        <div class="stat-card c-yellow" onclick="navTo('contracts','reviewing')"><div class="stat-label">待审批</div><div class="stat-value c-yellow" id="db-reviewing">0</div><div class="stat-sub">需跟进处理</div></div>
+        <div class="stat-card c-red" onclick="navTo('contracts','expiring')"><div class="stat-label">即将到期</div><div class="stat-value c-red" id="db-expiring">0</div><div class="stat-sub">60天内到期</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="card-title">📋 近期到期<span class="card-link" onclick="navTo('contracts','expiring')">查看全部→</span></div><div id="db-expiring-list"></div></div>
+        <div class="card"><div class="card-title">⏳ 待处理合同<span class="card-link" onclick="navTo('contracts','reviewing')">查看全部→</span></div><div id="db-pending-list"></div></div>
+      </div>
+      <div class="section-title">合同类型分布</div>
+      <div id="db-type-grid" style="display:grid;gap:10px;margin-bottom:20px"></div>
+    </div>
+
+    <!-- CONTRACTS -->
+    <div class="page" id="page-contracts">
+      <div class="table-wrap">
+        <div class="table-head">
+          <div class="filter-tabs">
+            <div class="ftab active" data-filter="all">全部 <span id="cnt-all"></span></div>
+            <div class="ftab" data-filter="reviewing">审核中 <span id="cnt-reviewing"></span></div>
+            <div class="ftab" data-filter="signing">签署中 <span id="cnt-signing"></span></div>
+            <div class="ftab" data-filter="active">执行中 <span id="cnt-active"></span></div>
+            <div class="ftab" data-filter="expiring">即将到期 <span id="cnt-expiring"></span></div>
+            <div class="ftab" data-filter="expired">已到期 <span id="cnt-expired"></span></div>
+          </div>
+          <button class="btn btn-primary" style="margin-left:auto;font-size:12px" onclick="openContractForm(null)">＋ 手动添加</button>
+        </div>
+        <table><thead><tr><th>合同名称 / 备注</th><th>对方当事人</th><th>类型</th><th>状态</th><th>签署日期</th><th>到期日期</th><th>操作</th></tr></thead>
+        <tbody id="contracts-tbody"></tbody></table>
+        <div id="contracts-empty" style="display:none;text-align:center;padding:48px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">📄</div>暂无合同记录</div>
+      </div>
+    </div>
+
+    <!-- UPLOAD -->
+    <div class="page" id="page-upload">
+      <div style="max-width:680px">
+        <div id="up-step1" class="card">
+          <div class="section-title">上传合同文件</div>
+          <div class="upload-zone" id="uploadZone" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept=".pdf,.docx,.doc" style="display:none" onchange="handleFile(this.files[0])">
+            <div style="font-size:36px;margin-bottom:10px">📄</div>
+            <div style="font-size:14px;font-weight:500;margin-bottom:4px">点击或拖拽上传合同文件</div>
+            <div style="font-size:12px;color:var(--text3)">支持 PDF、Word (.docx) · 中英文均可 · 最大 20MB</div>
+            <button class="btn btn-primary" style="margin-top:14px" onclick="event.stopPropagation();document.getElementById('fileInput').click()">选择文件</button>
+          </div>
+        </div>
+        <div id="up-step2" class="card" style="display:none;text-align:center;padding:48px">
+          <div style="font-size:40px;margin-bottom:12px">🤖</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">AI 正在分析合同...</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:20px" id="up-status">正在读取文件内容</div>
+          <div class="progress-bar" style="max-width:280px;margin:0 auto"><div class="progress-fill" id="up-progress" style="width:0%"></div></div>
+        </div>
+        <div id="up-step3" class="card" style="display:none">
+          <div class="section-title">确认合同信息</div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 13px;display:flex;align-items:center;gap:9px;margin-bottom:18px;font-size:13px">
+            <span style="font-size:18px">📄</span><span id="up-fname" style="font-weight:500;flex:1"></span><span id="up-fsize" style="color:var(--text3);font-size:12px"></span>
+            <span style="background:var(--al);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600">已识别</span>
+          </div>
+          <div class="form-grid">
+            <div class="fg-full"><label class="form-label">合同名称 * <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-name" type="text"></div>
+            <div><label class="form-label">合同编号</label><input class="form-input" id="f-id" type="text"></div>
+            <div><label class="form-label">合同类型 <span style="color:var(--accent);font-size:10px">● AI识别</span></label>
+              <select class="form-input" id="f-type"><option>服务协议</option><option>采购合同</option><option>保密协议（NDA）</option><option>劳动合同</option><option>合作协议</option><option>租赁合同</option><option>金融合同</option><option>数据协议</option><option>其他</option></select></div>
+            <div><label class="form-label">对方当事人 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-party" type="text"></div>
+            <div><label class="form-label">合同金额 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-amount" type="text" placeholder="如：SGD 50,000"></div>
+            <div><label class="form-label">适用法律 <span style="color:var(--accent);font-size:10px">● AI识别</span></label>
+              <select class="form-input" id="f-law"><option>新加坡法律</option><option>中华人民共和国法律</option><option>英国法律</option><option>其他</option></select></div>
+            <div><label class="form-label">签署日期 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-start" type="date" oninput="updateUploadId()"></div>
+            <div><label class="form-label">到期日期 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-end" type="date"></div>
+            <div><label class="form-label">合同状态</label>
+              <select class="form-input" id="f-status"><option value="reviewing">审核中</option><option value="signing">签署中</option><option value="active">执行中</option><option value="expiring">即将到期</option><option value="expired">已到期</option></select></div>
+            <div><label class="form-label">所属公司</label>
+              <select class="form-input" id="f-company"></select></div>
+            <div><label class="form-label">是否最终签署版？</label>
+              <div class="final-toggle">
+                <div class="ftoggle-btn" id="ft-yes" onclick="setFinal(true)">✅ 是，最终签署版</div>
+                <div class="ftoggle-btn selected" id="ft-no" onclick="setFinal(false)">📝 否，历史版本</div>
+              </div></div>
+            <div class="fg-full"><label class="form-label">AI 摘要 <span style="color:var(--accent);font-size:10px">● AI生成</span></label><textarea class="form-input" id="f-notes" rows="3"></textarea></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:18px">
+            <button class="btn btn-ghost" onclick="resetUpload()">← 重新上传</button>
+            <button class="btn btn-primary" onclick="archiveContract()">✓ 确认归档</button>
+          </div>
+        </div>
+        <div id="up-step4" class="card" style="display:none;text-align:center;padding:48px">
+          <div style="font-size:40px;margin-bottom:12px">🎉</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:6px">合同已归档！</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:24px" id="up-success-msg"></div>
+          <div style="display:flex;gap:10px;justify-content:center">
+            <button class="btn btn-ghost" onclick="resetUpload()">继续上传</button>
+            <button class="btn btn-primary" onclick="navTo('contracts')">查看合同列表 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENTITIES -->
+    <div class="page" id="page-entities">
+      <div class="split-layout">
+        <div class="split-left">
+          <div class="split-left-header">
+            <span class="split-left-title">集团列表</span>
+            <button class="btn btn-primary" style="padding:4px 9px;font-size:11px" onclick="openGroupForm(null)">＋ 集团</button>
+          </div>
+          <div class="split-left-body" id="entity-list"></div>
+        </div>
+        <div class="split-right" id="entity-right">
+          <div class="placeholder-empty"><div class="placeholder-icon">🏢</div><div class="placeholder-text">请选择左侧集团</div><div style="font-size:12px">点击集团查看子公司</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEMPLATES -->
+    <div class="page" id="page-templates">
+      <div class="split-layout">
+        <div class="split-left">
+          <div class="split-left-header">
+            <span class="split-left-title">模板文件夹</span>
+            <button class="btn btn-primary" style="padding:4px 9px;font-size:11px" onclick="openTplFolderForm(null)">＋ 新建</button>
+          </div>
+          <div class="split-left-body" id="tpl-folder-list"></div>
+        </div>
+        <div class="split-right" id="tpl-right">
+          <div class="placeholder-empty"><div class="placeholder-icon">📁</div><div class="placeholder-text">请选择左侧文件夹</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div class="page" id="page-timeline">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <div style="font-size:15px;font-weight:600">审批流程模板</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:3px">定义标准审批步骤，在合同详情中套用</div>
+        </div>
+        <button class="btn btn-primary" onclick="openTlForm(null)">＋ 新建模板</button>
+      </div>
+      <div id="tl-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px"></div>
+      <div id="tl-empty" style="display:none;text-align:center;padding:60px;color:var(--text3)">
+        <div style="font-size:36px;margin-bottom:10px">🔄</div>
+        <div style="font-size:14px">暂无模板，点击「＋ 新建模板」创建</div>
+      </div>
+    </div>
+
+    <!-- TIMELINE MODAL: Template form -->
+    <div class="overlay" id="modal-tl-form">
+      <div class="modal" style="width:520px;max-height:90vh">
+        <div class="modal-title"><span id="tl-form-title">新建审批模板</span><span class="modal-close" onclick="closeModal('modal-tl-form')">×</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
+          <div><label class="form-label">模板名称 *</label><input class="form-input" id="tl-tname" type="text" placeholder="如：标准合同审批、大额合同审批"></div>
+          <div><label class="form-label">描述</label><input class="form-input" id="tl-tdesc" type="text" placeholder="适用场景说明（可选）"></div>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">审批步骤</div>
+        <div id="tl-steps-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+        <button class="btn btn-ghost" style="width:100%;font-size:12px;justify-content:center" onclick="addTlStep()">＋ 添加步骤</button>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal('modal-tl-form')">取消</button>
+          <button class="btn btn-primary" onclick="saveTlTemplate()">保存模板</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIMELINE MODAL: Apply to contract -->
+    <div class="overlay" id="modal-tl-apply">
+      <div class="modal" style="width:480px">
+        <div class="modal-title">套用审批流程<span class="modal-close" onclick="closeModal('modal-tl-apply')">×</span></div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px">合同：<strong id="tla-cname"></strong></div>
+          <label class="form-label">选择审批模板 *</label>
+          <select class="form-input" id="tla-template" style="margin-top:5px"></select>
+        </div>
+        <div id="tla-preview" style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:4px"></div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal('modal-tl-apply')">取消</button>
+          <button class="btn btn-primary" onclick="applyTlTemplate()">套用流程</button>
+        </div>
+      </div>
+    </div>
+
+<!-- CALENDAR -->
+    <div class="page" id="page-calendar">
+      <div class="grid2">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <button class="btn btn-ghost" style="padding:4px 10px" onclick="calPrev()">&#8249;</button>
+            <span style="font-weight:600" id="cal-month-label"></span>
+            <button class="btn btn-ghost" style="padding:4px 10px" onclick="calNext()">&#8250;</button>
+          </div>
+          <div class="cal-grid" id="cal-grid">
+            <div class="cal-day-label">日</div><div class="cal-day-label">一</div><div class="cal-day-label">二</div><div class="cal-day-label">三</div><div class="cal-day-label">四</div><div class="cal-day-label">五</div><div class="cal-day-label">六</div>
+          </div>
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:14px;font-size:11px;color:var(--text3)">
+            <span>&#9679; <span style="color:var(--red)">红点</span> = 7天内</span>
+            <span>&#9679; <span style="color:var(--orange)">橙点</span> = 30天内</span>
+            <span>&#9679; <span style="color:var(--yellow)">黄点</span> = 60天内</span>
+          </div>
+        </div>
+        <div class="card" id="calendar-expiring-list"></div>
+      </div>
+    </div>
+
+<!-- ALERTS -->
+    <div class="page" id="page-alerts">
+      <div style="max-width:640px">
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title">提醒规则</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
+              <div><div style="font-size:13px;font-weight:500">合同到期前 60 天</div><div style="font-size:12px;color:var(--text3);margin-top:2px">标记为「即将到期」并在控制台提示</div></div>
+              <span style="background:var(--al);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600">已开启</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
+              <div><div style="font-size:13px;font-weight:500">合同到期前 7 天</div><div style="font-size:12px;color:var(--text3);margin-top:2px">侧边栏红色角标紧急提示</div></div>
+              <span style="background:var(--al);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600">已开启</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">待处理提醒 <span id="alerts-count" style="font-size:11px;background:var(--rl);color:var(--red);padding:1px 6px;border-radius:8px;font-weight:700"></span></div>
+          <div id="alerts-list"></div>
+        </div>
+      </div>
+    </div>
+
+<!-- MODALS -->
+<div class="overlay" id="modal-contract-detail">
+  <div class="modal" style="width:640px">
+    <div class="modal-title"><div style="display:flex;align-items:center;gap:10px"><span id="cd-name" style="font-size:15px"></span><span id="cd-status"></span></div><span class="modal-close" onclick="closeModal('modal-contract-detail')">×</span></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px" id="cd-meta"></div>
+    <div id="cd-notes-wrap" style="display:none;margin-bottom:16px"><label class="form-label">备注</label><div style="background:var(--surface2);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--text2);line-height:1.6" id="cd-notes"></div></div>
+    <!-- Approval progress (shown if contract has a flow) -->
+    <div id="cd-approval-section" style="display:none;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:600">🔄 审批进度</div>
+        <div style="display:flex;gap:6px">
+          <span id="cd-tl-name" style="font-size:11px;color:var(--text3)"></span>
+          <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" id="cd-tl-edit-btn">编辑进度</button>
+        </div>
+      </div>
+      <div id="cd-approval-steps"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600">版本历史</div>
+      <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openVersionForm()">＋ 添加版本</button>
+    </div>
+    <div id="cd-final-ver"></div>
+    <div id="cd-history-toggle" style="display:none"><div class="ver-history-toggle" onclick="toggleHistory()"><span id="history-arrow">▶</span><span id="history-label"></span></div><div id="cd-history-list" style="display:none"></div></div>
+    <div id="cd-no-versions" style="display:none;text-align:center;padding:20px;color:var(--text3);font-size:13px">暂无版本记录</div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-contract-detail')">关闭</button><button class="btn btn-ghost" id="cd-apply-tl-btn">🔄 套用审批流程</button><button class="btn btn-primary" id="cd-edit-btn">✏ 编辑信息</button></div>
+  </div>
+</div>
+<div class="overlay" id="modal-contract-form">
+  <div class="modal">
+    <div class="modal-title"><span id="cf-title">添加合同</span><span class="modal-close" onclick="closeModal('modal-contract-form')">×</span></div>
+    <div class="form-grid">
+      <div class="fg-full"><label class="form-label">合同名称 *</label><input class="form-input" id="cf-name" type="text"></div>
+      <div><label class="form-label">合同编号</label><input class="form-input" id="cf-id" type="text"></div>
+      <div><label class="form-label">合同类型</label><select class="form-input" id="cf-type"><option>服务协议</option><option>采购合同</option><option>保密协议（NDA）</option><option>劳动合同</option><option>合作协议</option><option>租赁合同</option><option>金融合同</option><option>数据协议</option><option>其他</option></select></div>
+      <div><label class="form-label">对方当事人 *</label><input class="form-input" id="cf-party" type="text"></div>
+      <div><label class="form-label">合同金额</label><input class="form-input" id="cf-amount" type="text" placeholder="如：SGD 50,000"></div>
+      <div><label class="form-label">状态</label><select class="form-input" id="cf-status"><option value="reviewing">审核中</option><option value="signing">签署中</option><option value="active">执行中</option><option value="expiring">即将到期</option><option value="expired">已到期</option></select></div>
+      <div class="fg-full"><label class="form-label">所属公司</label><select class="form-input" id="cf-company"></select></div>
+      <div><label class="form-label">签署日期</label><input class="form-input" id="cf-start" type="date" oninput="updateCfId()"></div>
+      <div><label class="form-label">到期日期</label><input class="form-input" id="cf-end" type="date"></div>
+      <div class="fg-full"><label class="form-label">备注</label><textarea class="form-input" id="cf-notes" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-contract-form')">取消</button><button class="btn btn-primary" onclick="saveContract()">保存</button></div>
+  </div>
+</div>
+<div class="overlay" id="modal-version-form">
+  <div class="modal" style="width:460px">
+    <div class="modal-title">添加版本<span class="modal-close" onclick="closeModal('modal-version-form')">×</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label class="form-label">版本类型 *</label><select class="form-input" id="vf-type"><option value="final">✅ 最终签署版（PDF）</option><option value="review">🔍 审核稿</option><option value="draft">📝 修改稿</option></select></div>
+      <div><label class="form-label">版本号</label><input class="form-input" id="vf-ver" type="text" placeholder="如：v1、v2、Final"></div>
+      <div><label class="form-label">日期 *</label><input class="form-input" id="vf-date" type="date"></div>
+      <div><label class="form-label">说明</label><input class="form-input" id="vf-note" type="text" placeholder="如：修改付款条款"></div>
+      <div>
+        <label class="form-label">上传文件（可选）</label>
+        <div id="vf-upload-zone" style="border:2px dashed var(--border);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:all .2s" onclick="document.getElementById('vf-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleVfDrop(event)">
+          <input type="file" id="vf-file-input" accept=".pdf,.docx,.doc" style="display:none" onchange="handleVfFile(this.files[0])">
+          <div id="vf-file-idle" style="font-size:12px;color:var(--text3)">📎 点击或拖拽上传 PDF / Word</div>
+          <div id="vf-file-done" style="display:none;font-size:12px;color:var(--accent)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-version-form')">取消</button><button class="btn btn-primary" onclick="saveVersion()">添加</button></div>
+  </div>
+</div>
+<div class="overlay" id="modal-group-form">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><span id="gf-title">添加集团</span><span class="modal-close" onclick="closeModal('modal-group-form')">×</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label class="form-label">集团名称 *</label><input class="form-input" id="gf-name" type="text" placeholder="如：ABC集团"></div>
+      <div><label class="form-label">图标</label><div class="icon-picker" id="group-icon-picker"></div></div>
+      <div><label class="form-label">备注</label><input class="form-input" id="gf-note" type="text"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-group-form')">取消</button><button class="btn btn-primary" onclick="saveGroup()">保存</button></div>
+  </div>
+</div>
+<div class="overlay" id="modal-entity-form">
+  <div class="modal" style="width:480px">
+    <div class="modal-title"><span id="ef-title">添加子公司</span><span class="modal-close" onclick="closeModal('modal-entity-form')">×</span></div>
+    <div class="form-grid">
+      <div class="fg-full"><label class="form-label">公司名称 *</label><input class="form-input" id="ef-name" type="text" placeholder="如：ABC Holdings Pte Ltd"></div>
+      <div><label class="form-label">UEN</label><input class="form-input" id="ef-uen" type="text" placeholder="如：202312345A"></div>
+      <div><label class="form-label">注册地</label><select class="form-input" id="ef-reg"><option>新加坡</option><option>中国大陆</option><option>香港</option><option>台湾</option><option>其他</option></select></div>
+      <div><label class="form-label">公司类型</label><select class="form-input" id="ef-type"><option>控股公司</option><option>运营公司</option><option>子公司</option><option>关联公司</option><option>其他</option></select></div>
+      <div><label class="form-label">备注</label><input class="form-input" id="ef-note" type="text"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-entity-form')">取消</button><button class="btn btn-primary" onclick="saveEntity()">保存</button></div>
+  </div>
+</div>
+<div class="overlay" id="modal-cat-form">
+  <div class="modal" style="width:400px">
+    <div class="modal-title"><span id="catf-title">添加分类</span><span class="modal-close" onclick="closeModal('modal-cat-form')">×</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label class="form-label">分类名称 *</label><input class="form-input" id="catf-name" type="text" placeholder="如：采购合同、服务协议"></div>
+      <div><label class="form-label">图标</label><div class="icon-picker" id="cat-icon-picker"></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-cat-form')">取消</button><button class="btn btn-primary" onclick="saveCat()">保存</button></div>
+  </div>
+</div>
+<div class="overlay" id="modal-tpl-folder-form">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><span id="tff-title">新建文件夹</span><span class="modal-close" onclick="closeModal('modal-tpl-folder-form')">×</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label class="form-label">文件夹名称 *</label><input class="form-input" id="tff-name" type="text" placeholder="如：ABC Holdings 模板库"></div>
+      <div><label class="form-label">图标</label><div class="icon-picker" id="tpl-icon-picker"></div></div>
+      <div><label class="form-label">描述</label><input class="form-input" id="tff-desc" type="text"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-tpl-folder-form')">取消</button><button class="btn btn-primary" onclick="saveTplFolder()">保存</button></div>
+  </div>
+</div>
+<div class="overlay" id="modal-tpl-file-form">
+  <div class="modal" style="width:520px">
+    <div class="modal-title"><span id="tpff-title">添加模板</span><span class="modal-close" onclick="closeModal('modal-tpl-file-form')">×</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <!-- File upload zone -->
+      <div>
+        <label class="form-label">上传模板文件</label>
+        <div id="tpff-upload-zone" class="upload-zone" style="padding:20px" onclick="document.getElementById('tpff-file-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleTplFileDrop(event)">
+          <input type="file" id="tpff-file-input" accept=".pdf,.docx,.doc" style="display:none" onchange="handleTplFileSelect(this.files[0])">
+          <div id="tpff-file-placeholder">
+            <div style="font-size:24px;margin-bottom:6px">📎</div>
+            <div style="font-size:13px;font-weight:500">点击或拖拽上传模板文件</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">PDF、Word (.docx) · 建议 10MB 以内</div>
+          </div>
+          <div id="tpff-file-selected" style="display:none;text-align:center">
+            <div style="font-size:24px;margin-bottom:6px">✅</div>
+            <div id="tpff-file-name" style="font-size:13px;font-weight:500;color:var(--accent)"></div>
+            <div id="tpff-file-size" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+            <button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;margin-top:8px" onclick="event.stopPropagation();clearTplFile()">重新选择</button>
+          </div>
+        </div>
+      </div>
+      <div><label class="form-label">模板名称 * <span style="font-size:10px;color:var(--text3)">（不填则使用文件名）</span></label><input class="form-input" id="tpff-name" type="text" placeholder="如：标准服务协议、NDA模板"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="form-label">合同类型</label><select class="form-input" id="tpff-type"><option>服务协议</option><option>采购合同</option><option>保密协议（NDA）</option><option>劳动合同</option><option>合作协议</option><option>租赁合同</option><option>其他</option></select></div>
+        <div><label class="form-label">语言</label><select class="form-input" id="tpff-lang"><option>中文</option><option>英文</option><option>中英双语</option></select></div>
+        <div><label class="form-label">版本号</label><input class="form-input" id="tpff-ver" type="text" placeholder="如：v1.0、2026版"></div>
+        <div><label class="form-label">备注</label><input class="form-input" id="tpff-note" type="text"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-tpl-file-form')">取消</button><button class="btn btn-primary" onclick="saveTplFile()">添加模板</button></div>
+  </div>
+</div>
+
+<!-- TIMELINE MODAL: Edit step progress -->
+<div class="overlay" id="modal-tl-step-edit">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">更新审批进度<span class="modal-close" onclick="closeModal('modal-tl-step-edit')">×</span></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:14px">合同：<strong id="tlse-cname"></strong></div>
+    <div id="tlse-steps" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-tl-step-edit')">取消</button>
+      <button class="btn btn-primary" onclick="saveStepProgress()">保存进度</button>
+    </div>
+  </div>
+</div>
+
+<script>// ═══════════════════════════════════════════════════════
+//  API LAYER — 所有数据通过 Node.js 后端读写
+//  GET  /api/data          → 加载所有数据
+//  POST /api/data          → 保存所有数据
+//  POST /api/files/upload  → 上传文件
+//  GET  /api/files/:id     → 下载 / 预览文件
+// ═══════════════════════════════════════════════════════
+
+// ── Loading overlay ────────────────────────────────────
+function showLoadingOverlay(show){
+  var ov = document.getElementById('fb-loading');
+  if(ov) ov.style.display = show ? 'flex' : 'none';
+}
+
+// ── 从服务器加载所有数据 ────────────────────────────────
+function fbLoadAll(){
+  showLoadingOverlay(true);
+  return fetch('/api/data')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.contracts && d.contracts.length) C  = d.contracts;
+      if(d.entities  && d.entities.length)  E  = d.entities;
+      if(d.templates && d.templates.length) T  = d.templates;
+      if(d.meta      && Object.keys(d.meta).length) M = d.meta;
+      if(d.timeline  && d.timeline.length)  TL = d.timeline;
+      showLoadingOverlay(false);
+      console.log('API data loaded: ' + C.length + ' contracts');
+    })
+    .catch(function(err){
+      console.warn('API load failed, using localStorage:', err);
+      showLoadingOverlay(false);
+    });
+}
+
+// ── 保存所有数据到服务器（防抖 800ms）─────────────────────
+function fbSaveAll(){
+  clearTimeout(window._apiSaveTimer);
+  window._apiSaveTimer = setTimeout(function(){
+    fetch('/api/data', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ contracts: C, entities: E, templates: T, meta: M, timeline: TL||[] })
+    }).catch(function(e){ console.warn('API save failed:', e); });
+  }, 800);
+}
+
+// ── 上传文件到服务器 → Firebase Storage ───────────────────
+// 返回 Promise<{ url, name } | null>
+function uploadToStorage(id, fileObj){
+  if(!fileObj || !(fileObj.dataUrl || fileObj.b64)) return Promise.resolve(null);
+  // 把 dataUrl 转成 Blob，再组装 FormData
+  var dataUrl  = fileObj.dataUrl || fileObj.b64;
+  var parts    = dataUrl.split(',');
+  var mime     = parts[0].match(/:(.*?);/)[1];
+  var bstr     = atob(parts[1]);
+  var buf      = new Uint8Array(bstr.length);
+  for(var i=0; i<bstr.length; i++) buf[i] = bstr.charCodeAt(i);
+  var blob     = new Blob([buf], {type: mime});
+  var fd       = new FormData();
+  fd.append('fileId', id);
+  fd.append('file',   blob, fileObj.name || id);
+  return fetch('/api/files/upload', { method: 'POST', body: fd })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ return d.url ? { url: d.url, name: d.name } : null; })
+    .catch(function(e){ console.warn('File upload failed:', e); return null; });
+}
+
+// ── 打开 / 下载文件（通过服务器代理）─────────────────────
+function openFromStorage(fileId, fileType, fileName){
+  window.open('/api/files/' + fileId, '_blank');
+}
+
+// ── 兼容旧代码的 saveFile / loadFile（空操作）────────────
+function saveFile(id, fileObj){ return Promise.resolve(); }
+function loadFile(id){ return Promise.resolve(null); }
+function deleteFile(id){ return Promise.resolve(); }
+
+
+
+// ═══════════════════════════════════════════════════════
+//  CONTRACT MANAGEMENT SYSTEM  –  Main Script
+// ═══════════════════════════════════════════════════════
+
+// ── Storage keys ──────────────────────────────────────
+var SK = { C:'cms_c', E:'cms_e', T:'cms_t', M:'cms_m' };
+
+// ── Default data ───────────────────────────────────────
+var DEF_C = [
+  {id:'2024052101',name:'Temasek Holdings 服务框架协议',party:'Temasek Holdings Pte Ltd',type:'服务协议',status:'expiring',start:'2024-05-21',end:'2026-05-21',amount:'SGD 120,000',notes:'年度服务框架协议',versions:[]},
+  {id:'2025030801',name:'字节跳动合作协议 v2',party:'ByteDance Pte Ltd',type:'合作协议',status:'reviewing',start:'',end:'',amount:'',notes:'',versions:[]},
+  {id:'2024061101',name:'德勤会计服务合同',party:'Deloitte & Touche LLP',type:'服务协议',status:'active',start:'2024-06-11',end:'2026-06-11',amount:'SGD 80,000',notes:'',versions:[]},
+  {id:'2024091501',name:'AWS 云服务采购合同',party:'Amazon Web Services',type:'采购合同',status:'active',start:'2024-09-15',end:'2027-09-15',amount:'SGD 36,000',notes:'',versions:[]}
+];
+var DEF_E = [
+  {id:1,name:'ABC集团',icon:'🏛',note:'集团总部',children:[
+    {id:11,name:'ABC Holdings Pte Ltd',uen:'201812345A',reg:'新加坡',type:'控股公司',note:'集团控股主体',cats:[{id:1,name:'服务协议',icon:'🤝',count:5},{id:2,name:'保密协议',icon:'🔐',count:3}]},
+    {id:12,name:'ABC Operations Pte Ltd',uen:'202056789B',reg:'新加坡',type:'运营公司',note:'新加坡日常运营',cats:[{id:1,name:'劳动合同',icon:'🏢',count:6}]}
+  ]},
+  {id:2,name:'XYZ集团',icon:'🏢',note:'中国区集团',children:[
+    {id:21,name:'上海XYZ科技有限公司',uen:'91310000XXXXXXXX',reg:'中国大陆',type:'子公司',note:'中国区运营主体',cats:[{id:1,name:'采购合同',icon:'📦',count:8}]}
+  ]}
+];
+var DEF_T = [
+  {id:1,name:'ABC Holdings',icon:'🏢',desc:'控股主体模板',files:[{id:1,name:'标准服务协议',type:'服务协议',lang:'英文',ver:'v2.1',note:'',added:'2026-01-10'}]},
+  {id:2,name:'上海XYZ科技',icon:'🌏',desc:'中国区模板',files:[{id:1,name:'采购框架协议',type:'采购合同',lang:'中文',ver:'v1.0',note:'',added:'2026-03-01'}]}
+];
+
+// ── State ──────────────────────────────────────────────
+var C, E, T, M;
+var curFilter   = 'all';
+var editCid     = null;
+var curGrpId    = null;
+var curCoId     = null;
+var editGrpId   = null;
+var editCoId    = null;
+var editCatGid  = null;
+var editCatEid  = null;
+var editCatCid  = null;
+var curTplId    = null;
+var editTplId   = null;
+var editTplFid  = null;
+var curViewCid  = null;
+var histOpen    = false;
+var upIsFinal   = false;
+var selGrpIcon  = '🏛';
+var selCatIcon  = '📋';
+var selTplIcon  = '📁';
+
+var GRP_ICONS = ['🏛','🏢','🌏','🏗','💼','🚀','⚖','🔐','🌐','💰','🤝','🏭'];
+var CAT_ICONS = ['📦','🤝','🔐','🏢','💼','📋','🏗','🚀','💰','⚖','🌏','🏭'];
+var TPL_ICONS = ['📁','🏢','🌏','🏗','💼','🚀','⚖','🔐','📋','💰','🤝','🏭'];
+
+var SL = {reviewing:'审核中',signing:'签署中',active:'执行中',expiring:'即将到期',expired:'已到期'};
+var SB = {reviewing:'b-reviewing',signing:'b-signing',active:'b-active',expiring:'b-expiring',expired:'b-expired'};
+var TI = {'服务协议':'🤝','采购合同':'📦','保密协议（NDA）':'🔐','劳动合同':'🏢','合作协议':'🚀','租赁合同':'🏗','金融合同':'💰','数据协议':'🔒','其他':'📋'};
+
+// ── Storage helpers ─────────────────────────────────────
+function load(k,d){ try{var v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;} }
+var _suppressFbSync = false; // true during initial load to prevent overwriting server data
+
+function save(k,v){
+  try{ localStorage.setItem(k,JSON.stringify(v)); }
+  catch(e){ console.warn('localStorage save failed:',e); }
+  // Sync to server unless suppressed during initial load
+  if(!_suppressFbSync) fbSaveAll();
+}
+function saveAll(){ save(SK.C,C);save(SK.E,E);save(SK.T,T);save(SK.M,M); }
+
+// ── DOM helpers ─────────────────────────────────────────
+function mk(tag,cls,txt){
+  var e=document.createElement(tag);
+  if(cls)e.className=cls;
+  if(txt!=null)e.textContent=txt;
+  return e;
+}
+function q(id){return document.getElementById(id);}
+function setText(id,v){var e=q(id);if(e)e.textContent=v;}
+function getVal(id){var e=q(id);return e?e.value:'';}
+function setVal(id,v){var e=q(id);if(e)e.value=v;}
+function setOpt(id,v){
+  var s=q(id);if(!s)return;
+  for(var i=0;i<s.options.length;i++){
+    if(s.options[i].value===v||s.options[i].text===v){s.selectedIndex=i;return;}
+  }
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function pad2(n){return String(n).padStart(2,'0');}
+function today(){var d=new Date();return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function daysTo(s){
+  if(!s)return null;
+  var t=new Date(s);t.setHours(0,0,0,0);
+  var n=new Date();n.setHours(0,0,0,0);
+  return Math.round((t-n)/86400000);
+}
+function genId(dateStr){
+  var d=dateStr?dateStr.replace(/-/g,''):(function(){var n=new Date();return n.getFullYear()+pad2(n.getMonth()+1)+pad2(n.getDate());})();
+  var n=C.filter(function(c){return c.id&&c.id.startsWith(d);}).length;
+  return d+pad2(n+1);
+}
+
+// ── Navigation ──────────────────────────────────────────
+var PAGE_TITLES = {dashboard:'控制台',contracts:'合同列表',upload:'上传合同',entities:'公司主体',templates:'合同模板',timeline:'审批流程',calendar:'到期日历',alerts:'提醒管理'};
+function navTo(pid){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  var pg=q('page-'+pid);if(!pg)return;
+  pg.classList.add('active');
+  setText('pageTitle',PAGE_TITLES[pid]||pid);
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  var ni=document.querySelector('[data-page="'+pid+'"]');
+  if(ni)ni.classList.add('active');
+  if(pid==='dashboard')renderDashboard();
+  if(pid==='contracts')renderContracts();
+  if(pid==='entities')renderGroupList();
+  if(pid==='templates')renderTplList();
+  if(pid==='alerts')renderAlerts();
+  if(pid==='timeline')renderTimeline();
+  if(pid==='calendar')renderCalendar();
+}
+function openModal(id){q(id).classList.add('open');}
+function closeModal(id){q(id).classList.remove('open');}
+
+// ── Dashboard ───────────────────────────────────────────
+function renderDashboard(){
+  var total=C.length;
+  var active=C.filter(function(c){return c.status==='active';}).length;
+  var reviewing=C.filter(function(c){return c.status==='reviewing'||c.status==='signing';}).length;
+  var expList=C.filter(function(c){var d=daysTo(c.end);return d!==null&&d>=0&&d<=60;});
+  expList.sort(function(a,b){return new Date(a.end)-new Date(b.end);});
+  var nm=new Date().getMonth(),ny=new Date().getFullYear();
+  var newM=C.filter(function(c){if(!c.start)return false;var d=new Date(c.start);return d.getMonth()===nm&&d.getFullYear()===ny;}).length;
+
+  setText('db-total',total);
+  setText('db-total-sub',newM>0?'↑ 本月新增 '+newM+' 份':'本月暂无新增');
+  setText('db-active',active);
+  setText('db-reviewing',reviewing);
+  setText('db-expiring',expList.length);
+
+  var eEl=q('db-expiring-list');
+  eEl.innerHTML='';
+  if(!expList.length){
+    eEl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">近期无到期合同</div>';
+  } else {
+    expList.slice(0,5).forEach(function(c){
+      var d=daysTo(c.end);
+      var col=d<=7?'var(--red)':d<=30?'var(--orange)':'var(--yellow)';
+      var icon=d<=7?'🚨':d<=30?'⚠':'📌';
+      var row=mk('div','alert-item');
+      var dot=mk('div','alert-dot');dot.style.background=col;
+      var info=mk('div');
+      var nm2=mk('div','alert-name',c.name);
+      var ai=mk('div','alert-info',icon+' '+d+'天后到期');
+      info.appendChild(nm2);info.appendChild(ai);
+      var dt=mk('div','alert-date',c.end);
+      row.appendChild(dot);row.appendChild(info);row.appendChild(dt);
+      eEl.appendChild(row);
+    });
+  }
+
+  var pEl=q('db-pending-list');
+  pEl.innerHTML='';
+  var pending=C.filter(function(c){return c.status==='reviewing'||c.status==='signing';});
+  if(!pending.length){
+    pEl.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">暂无待处理合同</div>';
+  } else {
+    pending.slice(0,5).forEach(function(c){
+      var col=c.status==='signing'?'var(--blue)':'var(--yellow)';
+      var pct=c.status==='signing'?80:40;
+      var row=mk('div','alert-item');
+      var dot=mk('div','alert-dot');dot.style.background=col;
+      var info=mk('div');info.style.cssText='flex:1;min-width:0';
+      var nm2=mk('div','alert-name',c.name);
+      var st=mk('div','alert-info',SL[c.status]);
+      var pb=mk('div','progress-bar');pb.style.marginTop='5px';
+      var pf=mk('div','progress-fill');pf.style.width=pct+'%';pf.style.background=col;
+      pb.appendChild(pf);
+      info.appendChild(nm2);info.appendChild(st);info.appendChild(pb);
+      var dt=mk('div','alert-date',pct+'%');
+      row.appendChild(dot);row.appendChild(info);row.appendChild(dt);
+      pEl.appendChild(row);
+    });
+  }
+
+  var tg=q('db-type-grid');
+  tg.innerHTML='';
+  var tc={};
+  C.forEach(function(c){tc[c.type]=(tc[c.type]||0)+1;});
+  var entries=Object.entries(tc).sort(function(a,b){return b[1]-a[1];});
+  if(!entries.length){tg.innerHTML='<div style="color:var(--text3);font-size:13px">暂无数据</div>';return;}
+  tg.style.gridTemplateColumns='repeat(auto-fill,minmax(130px,1fr))';
+  entries.forEach(function(kv){
+    var sc=mk('div','stat-card');sc.style.cssText='padding:14px;cursor:pointer';
+    sc.onclick=function(){navTo('contracts');};
+    var ic=mk('div');ic.style.cssText='font-size:22px;margin-bottom:5px';ic.textContent=TI[kv[0]]||'📋';
+    var lb=mk('div','stat-label',kv[0]);
+    var vl=mk('div');vl.style.cssText='font-size:20px;font-weight:700;color:var(--accent);margin-top:3px';vl.textContent=kv[1];
+    sc.appendChild(ic);sc.appendChild(lb);sc.appendChild(vl);
+    tg.appendChild(sc);
+  });
+
+  // Badges
+  var be=q('badge-expiring');if(be){be.textContent=expList.length;be.style.display=expList.length?'':'none';}
+  var urg=expList.filter(function(c){return daysTo(c.end)<=7;}).length;
+  var bu=q('badge-urgent');if(bu){bu.textContent=urg;bu.style.display=urg?'':'none';}
+}
+
+// ── Contracts ───────────────────────────────────────────
+function renderContracts(){
+  // Update counts
+  var counts={all:C.length,reviewing:0,signing:0,active:0,expiring:0,expired:0};
+  C.forEach(function(c){if(counts[c.status]!==undefined)counts[c.status]++;});
+  Object.keys(counts).forEach(function(k){
+    var e=q('cnt-'+k);if(e)e.textContent='('+counts[k]+')';
+  });
+  document.querySelectorAll('.ftab').forEach(function(t){
+    t.classList.toggle('active',t.dataset.filter===curFilter);
+  });
+
+  var dupIds=markDuplicatesInList();
+  var filtered=curFilter==='all'?C:C.filter(function(c){return c.status===curFilter;});
+  var tbody=q('contracts-tbody');
+  var empty=q('contracts-empty');
+  if(!filtered.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML='';
+
+  // Group by company
+  var groups={}; // key: company value or '__none__'
+  var groupOrder=[];
+  filtered.forEach(function(c){
+    var key=c.company||'__none__';
+    if(!groups[key]){groups[key]=[];groupOrder.push(key);}
+    groups[key].push(c);
+  });
+
+  groupOrder.forEach(function(key){
+    var list=groups[key];
+
+    // Group header row
+    var trGrp=document.createElement('tr');
+    var tdGrp=document.createElement('td');
+    tdGrp.colSpan=8;
+    tdGrp.style.cssText='padding:10px 18px 6px;background:var(--surface2);border-bottom:1px solid var(--border)';
+    var grpLabel=key==='__none__'?'未分配公司':getCompanyLabel(key);
+    var grpCount=list.length;
+    var grpHdr=mk('div','');
+    grpHdr.style.cssText='display:flex;align-items:center;gap:8px';
+    var grpIcon=mk('span','',key==='__none__'?'📋':'🏢');
+    grpIcon.style.fontSize='13px';
+    var grpName=mk('span','',grpLabel||key);
+    grpName.style.cssText='font-size:12px;font-weight:700;color:var(--text2)';
+    var grpBadge=mk('span','',grpCount+' 份');
+    grpBadge.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;background:var(--border);color:var(--text3)';
+    grpHdr.appendChild(grpIcon);grpHdr.appendChild(grpName);grpHdr.appendChild(grpBadge);
+    tdGrp.appendChild(grpHdr);trGrp.appendChild(tdGrp);
+    tbody.appendChild(trGrp);
+
+    // Contract rows in this group
+    list.forEach(function(c){
+      var tr=mk('tr');
+
+      // Name + contract ID + notes
+      var tdN=mk('td');
+      var nm=mk('div','cn',c.name);
+      nm.onclick=(function(id){return function(){openContractDetail(id);};})(c.id);
+      var cid=mk('div','cid',c.id);
+      tdN.appendChild(nm);tdN.appendChild(cid);
+      // Duplicate badge
+      if(dupIds.indexOf(c.id)!==-1){
+        var dupBadge=mk('span','','⚠️ 疑似重复');
+        dupBadge.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;font-weight:600;background:#fff3e0;color:#f57f17;border:1px solid #ffe082;margin-top:3px;display:inline-block;cursor:pointer';
+        dupBadge.title='点击查看重复合同';
+        dupBadge.onclick=(function(n,p){return function(){showDupList(n,p);};})(c.name,c.party);
+        tdN.appendChild(dupBadge);
+      }
+      // Notes — show if exists
+      if(c.notes&&c.notes.trim()){
+        var nt=mk('div','',c.notes.trim());
+        nt.style.cssText='font-size:11px;color:var(--text3);margin-top:3px;line-height:1.4;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        nt.title=c.notes.trim(); // full text on hover
+        tdN.appendChild(nt);
+      }
+
+      // Party
+      var tdP=mk('td','',c.party);
+
+      // Type
+      var tdT=mk('td');tdT.appendChild(mk('span','ct',c.type));
+
+      // Company column — show sub-label only (group already shown in header)
+      var tdCo=mk('td');
+      // skip rendering company again since it's in the group header
+
+      // Status
+      var tdS=mk('td');
+      var bs=mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status);
+      tdS.appendChild(bs);
+
+      // Dates
+      var tdDs=mk('td','cd',c.start||'--');
+      var tdDe=mk('td','cd',c.end||'--');
+      if(c.status==='expiring')tdDe.style.color='var(--orange)';
+      if(c.status==='expired')tdDe.style.color='var(--text3)';
+
+      // Actions
+      var tdA=mk('td');
+      var btns=mk('div','act-btns');
+      var latestFile=null;
+      if(c.versions&&c.versions.length){
+        var finals=c.versions.filter(function(v){return v.type==='final'&&(v.fileData||v.hasFile);});
+        if(finals.length) latestFile=finals[finals.length-1];
+        else{var any=c.versions.filter(function(v){return v.fileData||v.hasFile;});if(any.length)latestFile=any[any.length-1];}
+      }
+      if(latestFile){
+        var bDl=mk('button','act-btn','⬇');bDl.title='下载 '+(latestFile.fileName||'');
+        bDl.onclick=(function(v){return function(e){e.stopPropagation();downloadContractFile(v);};})(latestFile);
+        var bPv=mk('button','act-btn','👁');bPv.title='预览';
+        bPv.onclick=(function(v){return function(e){e.stopPropagation();previewContractFile(v);};})(latestFile);
+        btns.appendChild(bDl);btns.appendChild(bPv);
+      }
+      var bE=mk('button','act-btn','编辑');
+      bE.onclick=(function(id){return function(){openContractForm(id);};})(c.id);
+      var bDel=mk('button','act-btn del','删除');
+      bDel.onclick=(function(id){return function(){deleteContract(id);};})(c.id);
+      btns.appendChild(bE);btns.appendChild(bDel);tdA.appendChild(btns);
+
+      [tdN,tdP,tdT,tdS,tdDs,tdDe,tdA].forEach(function(td){tr.appendChild(td);});
+      tbody.appendChild(tr);
+    });
+  });
+}
+
+
+function deleteContract(id){
+  var c=C.find(function(x){return x.id===id;});
+  if(!c||!confirm('确定删除「'+c.name+'」？'))return;
+  C=C.filter(function(x){return x.id!==id;});
+  save(SK.C,C);renderContracts();renderDashboard();
+}
+function openContractForm(id){
+  editCid=id||null;
+  setText('cf-title',id?'编辑合同':'添加合同');
+  var c=id?C.find(function(x){return x.id===id;}):null;
+  setVal('cf-name',c?c.name:'');
+  setVal('cf-id',c?c.id:genId(''));
+  setVal('cf-party',c?c.party:'');
+  setVal('cf-amount',c?c.amount:'');
+  setVal('cf-notes',c?c.notes:'');
+  setVal('cf-start',c?c.start:'');
+  setVal('cf-end',c?c.end:'');
+  setOpt('cf-type',c?c.type:'服务协议');
+  setOpt('cf-status',c?c.status:'reviewing');
+  buildCompanyOptions('cf-company',c?c.company||'':'');
+  openModal('modal-contract-form');
+}
+function updateCfId(){if(!editCid)setVal('cf-id',genId(getVal('cf-start')));}
+function saveContract(){
+  var name=getVal('cf-name').trim(),party=getVal('cf-party').trim();
+  if(!name||!party){alert('请填写合同名称和对方当事人');return;}
+  var data={id:getVal('cf-id').trim()||genId(getVal('cf-start')),name:name,party:party,
+    type:getVal('cf-type'),status:getVal('cf-status'),amount:getVal('cf-amount').trim(),
+    company:getVal('cf-company'),
+    start:getVal('cf-start'),end:getVal('cf-end'),notes:getVal('cf-notes').trim(),versions:[]};
+
+  // Check for duplicates only when adding new contract (not editing)
+  if(!editCid){
+    showDuplicateWarning(name, party,
+      function(){ // proceed
+        C.push(data);
+        save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();
+      },
+      function(existing){ // merge
+        mergeIntoExisting(existing);
+      }
+    );
+    return;
+  }
+
+  // Editing existing contract — no duplicate check
+  var idx=C.findIndex(function(x){return x.id===editCid;});
+  if(idx!==-1){data.versions=C[idx].versions||[];C[idx]=data;}
+  save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();
+}
+
+// ── Contract detail / versions ──────────────────────────
+function openContractDetail(id){
+  var c=C.find(function(x){return x.id===id;});if(!c)return;
+  if(!c.versions)c.versions=[];
+  curViewCid=id;histOpen=false;
+  setText('cd-name',c.name);
+  var meta=q('cd-meta');
+  meta.innerHTML='';
+  var coLabel=c.company?getCompanyLabel(c.company):'--';
+  var fields=[
+    ['合同编号',c.id],['对方当事人',c.party||'--'],['合同类型',c.type||'--'],
+    ['所属公司',coLabel],['签署日期',c.start||'--'],['到期日期',c.end||'--'],['合同金额',c.amount||'--']
+  ];
+  fields.forEach(function(f){
+    var d=mk('div');
+    var lb=mk('div','form-label',f[0]);
+    var vl=mk('div','',f[1]);vl.style.cssText='font-size:13px;margin-top:3px';
+    if(f[0]==='合同金额')vl.style.color='var(--accent)';
+    d.appendChild(lb);d.appendChild(vl);meta.appendChild(d);
+  });
+  // Status badge
+  var sb=q('cd-status');
+  if(sb){sb.innerHTML='';var b=mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status);sb.appendChild(b);}
+  // Notes
+  var nw=q('cd-notes-wrap');
+  if(c.notes){nw.style.display='block';setText('cd-notes',c.notes);}else{nw.style.display='none';}
+  // Edit button
+  var eb=q('cd-edit-btn');
+  if(eb)eb.onclick=function(){closeModal('modal-contract-detail');openContractForm(id);};
+  renderVersions(c);
+  renderContractApproval(c);
+  var ab=q('cd-apply-tl-btn');if(ab)ab.onclick=function(){closeModal('modal-contract-detail');openApplyTl(id);};
+  openModal('modal-contract-detail');
+}
+function renderVersions(c){
+  var vs = (c.versions||[]).slice().sort(function(a,b){
+    // Sort: final first, then by date desc
+    if(a.type==='final' && b.type!=='final') return -1;
+    if(a.type!=='final' && b.type==='final') return 1;
+    return (b.date||'') > (a.date||'') ? 1 : -1;
+  });
+
+  var fe = q('cd-final-ver');
+  var ht = q('cd-history-toggle');
+  var hl = q('cd-history-list');
+  var nv = q('cd-no-versions');
+
+  fe.innerHTML='';
+  if(ht) ht.style.display='none';
+  if(hl) hl.innerHTML='';
+  if(nv) nv.style.display='none';
+
+  if(!vs.length){
+    if(nv) nv.style.display='block';
+    return;
+  }
+
+  var TYPE_LABEL = {final:'最终签署版', review:'审核稿', draft:'修改稿'};
+  var TYPE_ICON  = {final:'📄', review:'🔍', draft:'📝'};
+  var TYPE_COLOR = {final:'var(--accent)', review:'var(--blue)', draft:'var(--yellow)'};
+
+  vs.forEach(function(v){
+    var isFinal = v.type==='final';
+    var row = mk('div');
+    row.style.cssText = 'display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:9px;margin-bottom:8px;border:1.5px solid '+(isFinal?'var(--am)':'var(--border)')+';background:'+(isFinal?'var(--al)':'var(--surface2)');
+
+    // Icon
+    var ic = mk('div','', TYPE_ICON[v.type]||'📋');
+    ic.style.cssText='font-size:22px;flex-shrink:0;margin-top:2px';
+
+    // Info
+    var info = mk('div');info.style.cssText='flex:1;min-width:0';
+
+    // Top row: type label + version number
+    var top = mk('div');top.style.cssText='display:flex;align-items:center;gap:7px;margin-bottom:4px;flex-wrap:wrap';
+    var typeLbl = mk('span','', TYPE_LABEL[v.type]||v.type);
+    typeLbl.style.cssText='font-size:11px;font-weight:700;color:'+(TYPE_COLOR[v.type]||'var(--text3)');
+    top.appendChild(typeLbl);
+    if(v.ver){
+      var verChip=mk('span','',v.ver);
+      verChip.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;background:var(--border);color:var(--text2);font-family:"JetBrains Mono",monospace';
+      top.appendChild(verChip);
+    }
+    info.appendChild(top);
+
+    // Note / description
+    if(v.note){
+      var note=mk('div','',v.note);note.style.cssText='font-size:13px;font-weight:500;margin-bottom:3px';
+      info.appendChild(note);
+    }
+
+    // File name if uploaded
+    if(v.fileName){
+      var fnRow=mk('div');fnRow.style.cssText='display:flex;align-items:center;gap:5px;margin-bottom:3px';
+      var fic=mk('span','',v.fileType&&v.fileType.includes('pdf')?'📄':'📝');fic.style.fontSize='11px';
+      var fnm=mk('span','',v.fileName);fnm.style.cssText='font-size:11px;color:var(--text2)';
+      fnRow.appendChild(fic);fnRow.appendChild(fnm);
+      info.appendChild(fnRow);
+    }
+
+    // Date
+    if(v.date){
+      var dt=mk('div','',v.date);dt.style.cssText='font-size:11px;color:var(--text3);font-family:"JetBrains Mono",monospace';
+      info.appendChild(dt);
+    }
+
+    row.appendChild(ic);row.appendChild(info);
+
+    // Action buttons
+    var btns=mk('div');btns.style.cssText='display:flex;gap:6px;align-items:center;flex-shrink:0';
+
+    if(v.fileData||v.hasFile){
+      var dlBtn=mk('button','btn '+(isFinal?'btn-primary':'btn-ghost'),'⬇ 下载');
+      dlBtn.style.cssText='font-size:11px;padding:4px 10px';
+      dlBtn.onclick=(function(ver){return function(){downloadContractFile(ver);};})(v);
+      btns.appendChild(dlBtn);
+
+      if(v.fileType&&v.fileType.includes('pdf')){
+        var pvBtn=mk('button','btn btn-ghost','👁 预览');
+        pvBtn.style.cssText='font-size:11px;padding:4px 10px';
+        pvBtn.onclick=(function(ver){return function(){previewContractFile(ver);};})(v);
+        btns.appendChild(pvBtn);
+      }
+    }
+
+    var delBtn=mk('button','ver-del-btn','×');
+    delBtn.onclick=(function(vid){return function(){deleteVersion(vid);};})(v.id);
+    btns.appendChild(delBtn);
+    row.appendChild(btns);
+
+    fe.appendChild(row);
+  });
+}
+
+
+function deleteVersion(vid){
+  if(!confirm('删除这个版本记录？'))return;
+  var idx=C.findIndex(function(x){return x.id===curViewCid;});
+  if(idx===-1)return;
+  if(!C[idx].versions)return;
+  C[idx].versions=C[idx].versions.filter(function(v){return v.id!==vid;});
+  save(SK.C,C);renderVersions(C[idx]);
+}
+
+// ── Upload / AI ─────────────────────────────────────────
+function handleDrop(e){e.preventDefault();q('uploadZone').classList.remove('drag');var f=e.dataTransfer.files[0];if(f)handleFile(f);}
+var uploadedFileData = null; // store file for archiving
+
+function handleFile(f){
+  if(!f)return;
+  if(!f.name.match(/\.(pdf|docx|doc)$/i)){alert('请上传 PDF 或 Word 文件');return;}
+  if(f.size>20*1024*1024){alert('文件不能超过 20MB');return;}
+  showStep(1,false);showStep(2,true);
+  var msgs=['正在读取文件内容','识别合同语言与类型','提取当事人信息','识别关键日期与金额','生成摘要','分析完成'];
+  var pcts=[15,35,55,75,90,100];var si=0;
+  var iv=setInterval(function(){if(si<msgs.length-1){setProgress(pcts[si],msgs[si]);si++;}},600);
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    uploadedFileData = {name:f.name, size:f.size, type:f.type, dataUrl:ev.target.result};
+    var b64=ev.target.result.split(',')[1];
+    var isPDF=f.name.match(/\.pdf$/i);
+    callAI(b64,isPDF,f.name,f).then(function(data){
+      clearInterval(iv);setProgress(100,'分析完成');
+      setTimeout(function(){showReview(f,data);},500);
+    }).catch(function(){clearInterval(iv);showReview(f,{});});
+  };
+  reader.readAsDataURL(f);
+}
+function showStep(n,v){var e=q('up-step'+n);if(e)e.style.display=v?'':'none';}
+function setProgress(pct,msg){var b=q('up-progress');if(b)b.style.width=pct+'%';setText('up-status',msg);}
+function setFinal(v){
+  upIsFinal=v;
+  q('ft-yes').classList.toggle('selected',v);
+  q('ft-no').classList.toggle('selected',!v);
+}
+function updateUploadId(){setVal('f-id',genId(getVal('f-start')||''));}
+function showReview(f,data){
+  showStep(2,false);showStep(3,true);
+  setText('up-fname',f.name);setText('up-fsize',(f.size/1024/1024).toFixed(2)+' MB');
+  buildCompanyOptions('f-company','');
+  setVal('f-id',genId(data.startDate||''));
+  if(data.name)setVal('f-name',data.name);
+  if(data.type)setOpt('f-type',data.type);
+  if(data.party)setVal('f-party',data.party);
+  if(data.amount)setVal('f-amount',data.amount);
+  if(data.law)setOpt('f-law',data.law);
+  if(data.startDate)setVal('f-start',data.startDate);
+  if(data.endDate)setVal('f-end',data.endDate);
+  if(data.summary)setVal('f-notes',data.summary);
+}
+function archiveContract(){
+  var name=getVal('f-name')||'未命名合同';var cid=getVal('f-id');var td=today();
+  var vid='v'+Date.now();
+  var ver={id:vid,type:upIsFinal?'final':'draft',ver:upIsFinal?'Final':'v1',
+    date:getVal('f-start')||td,note:upIsFinal?'最终签署版':'初始上传版本'};
+  var newC={id:cid,name:name,party:getVal('f-party')||'--',type:getVal('f-type'),
+    status:getVal('f-status'),amount:getVal('f-amount'),company:getVal('f-company'),
+    start:getVal('f-start'),end:getVal('f-end'),notes:getVal('f-notes'),
+    versions:[ver]};
+  if(uploadedFileData){
+    ver.fileName=uploadedFileData.name;
+    ver.fileSize=uploadedFileData.size;
+    ver.fileType=uploadedFileData.type;
+    ver.hasFile=true;
+    // Upload file to server → Firebase Storage
+    uploadToStorage(vid, {id:vid, name:uploadedFileData.name, size:uploadedFileData.size,
+      type:uploadedFileData.type, dataUrl:uploadedFileData.dataUrl}).then(function(r){
+      if(r&&r.url){
+        var ci=C.findIndex(function(x){return x.id===cid;});
+        if(ci!==-1){var vi=C[ci].versions.findIndex(function(v){return v.id===vid;});
+          if(vi!==-1){C[ci].versions[vi].storageUrl=r.url;save(SK.C,C);}}
+      }
+    });
+  }
+  C.push(newC);save(SK.C,C);
+  showStep(3,false);showStep(4,true);
+  setText('up-success-msg','"'+name+'" 已归档 · '+(upIsFinal?'标记为最终签署版':'归档为历史版本'));
+  renderDashboard();
+}
+function resetUpload(){
+  upIsFinal=false;
+  uploadedFileData=null;
+  if(q('ft-no'))q('ft-no').classList.add('selected');
+  if(q('ft-yes'))q('ft-yes').classList.remove('selected');
+  showStep(1,true);showStep(2,false);showStep(3,false);showStep(4,false);
+  setProgress(0,'');var fi=q('fileInput');if(fi)fi.value='';
+}
+var AI_SYS='你是合同信息提取专家。仔细阅读合同，提取以下信息并严格以JSON返回，不要其他文字：{"name":"合同完整名称","type":"服务协议/采购合同/保密协议（NDA）/劳动合同/合作协议/租赁合同/其他 之一","party":"对方当事人全称","amount":"合同金额含货币单位，无则空字符串","law":"新加坡法律/中华人民共和国法律/英国法律/其他 之一","startDate":"签署日期YYYY-MM-DD，无则空字符串","endDate":"到期日期YYYY-MM-DD，无则空字符串","summary":"2-3句中文摘要"}只返回JSON。';
+function callAI(b64,isPDF,fname,file){
+  var msgs;
+  if(isPDF){
+    msgs=[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'请提取合同关键信息。'}];
+    return doFetch(msgs);
+  }
+  if(typeof mammoth!=='undefined'){
+    return new Promise(function(res,rej){
+      var r=new FileReader();
+      r.onload=function(ev){
+        mammoth.extractRawText({arrayBuffer:ev.target.result}).then(function(result){
+          var txt=result.value||'';
+          var msg=txt.length>50?'以下是合同内容，请提取关键信息：\n\n'+(txt.length>8000?txt.slice(0,8000)+'...':txt):'文件名：'+fname+'\n无法读取，请根据文件名推断。';
+          res(doFetch([{type:'text',text:msg}]));
+        }).catch(function(){res(doFetch([{type:'text',text:'文件名：'+fname+'\n请根据文件名推断合同信息。'}]));});
+      };
+      r.onerror=rej;r.readAsArrayBuffer(file);
+    }).then(function(p){return p;});
+  }
+  return doFetch([{type:'text',text:'文件名：'+fname+'\n请根据文件名推断合同信息。'}]);
+}
+function doFetch(msgContent){
+  // AI 请求通过 Node.js 后端代理，API Key 不暴露在前端
+  return fetch('/api/ai/analyze',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:AI_SYS,messages:[{role:'user',content:msgContent}]})
+  }).then(function(r){return r.json();}).then(function(d){
+    var t=(d.content&&d.content[0]&&d.content[0].text)||'{}';
+    try{return JSON.parse(t.replace(/```json|```/g,'').trim());}catch(e){return {};}
+  });
+}
+
+// ── Entities (Groups → Companies → Categories) ──────────
+function renderGroupList(){
+  var el=q('entity-list');if(!el)return;
+  el.innerHTML='';
+  if(!E.length){
+    var em=mk('div','','暂无集团');em.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px';
+    el.appendChild(em);return;
+  }
+  E.forEach(function(g){
+    var item=mk('div','list-item'+(g.id===curGrpId?' active':''));
+    var icon=mk('span','',g.icon);icon.style.fontSize='18px';
+    var info=mk('div');info.style.cssText='min-width:0;flex:1';
+    var nm=mk('div','list-item-name',g.name);nm.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    var sub=mk('div','list-item-sub',g.children.length+' 家子公司');
+    info.appendChild(nm);info.appendChild(sub);
+    item.appendChild(icon);item.appendChild(info);
+    item.onclick=(function(gid){return function(){selectGroup(gid);};})(g.id);
+    el.appendChild(item);
+  });
+}
+function selectGroup(gid){
+  curGrpId=gid;curCoId=null;renderGroupList();
+  var g=E.find(function(x){return x.id===gid;});if(g)showCompanyList(g);
+}
+function showCompanyList(g){
+  var er=q('entity-right');er.innerHTML='';
+  // Header
+  var hc=mk('div','card');
+  var hrow=mk('div');hrow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:16px';
+  var li=mk('div');li.style.cssText='display:flex;align-items:center;gap:11px';
+  var av=mk('div','',g.icon);av.style.cssText='width:42px;height:42px;border-radius:10px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:22px';
+  var inf=mk('div');
+  var nm=mk('div','',g.name);nm.style.cssText='font-size:17px;font-weight:700';
+  var nt=mk('div','',g.note||'集团');nt.style.cssText='font-size:12px;color:var(--text3);margin-top:2px';
+  inf.appendChild(nm);inf.appendChild(nt);li.appendChild(av);li.appendChild(inf);
+  var ar=mk('div');ar.style.cssText='display:flex;gap:8px';
+  var be=mk('button','btn btn-ghost','✏ 编辑');be.style.fontSize='12px';be.onclick=function(){openGroupForm(g.id);};
+  var ba=mk('button','btn btn-primary','＋ 添加子公司');ba.style.fontSize='12px';ba.onclick=function(){openEntityForm(g.id,null);};
+  var bd=mk('button','btn btn-danger','删除');bd.style.fontSize='12px';bd.onclick=function(){deleteGroup(g.id);};
+  ar.appendChild(be);ar.appendChild(ba);ar.appendChild(bd);
+  hrow.appendChild(li);hrow.appendChild(ar);hc.appendChild(hrow);
+  var tc=g.children.reduce(function(s,e){return s+e.cats.length;},0);
+  var sg=mk('div');sg.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding-top:12px;border-top:1px solid var(--border)';
+  function statItem(lbl,val){var d=mk('div');var l=mk('div','form-label',lbl);var v=mk('div','',String(val));v.style.cssText='font-size:20px;font-weight:700;color:var(--accent);margin-top:3px';d.appendChild(l);d.appendChild(v);return d;}
+  sg.appendChild(statItem('子公司数',g.children.length));
+  sg.appendChild(statItem('分类总数',tc));
+  var nt2=mk('div');var l2=mk('div','form-label','备注');var v2=mk('div','',g.note||'--');v2.style.cssText='font-size:13px;margin-top:5px';nt2.appendChild(l2);nt2.appendChild(v2);sg.appendChild(nt2);
+  hc.appendChild(sg);er.appendChild(hc);
+  // Company grid
+  var cc=mk('div','card');
+  var st=mk('div','section-title','子公司');cc.appendChild(st);
+  if(!g.children.length){
+    var em=mk('div','','暂无子公司，点击「＋ 添加子公司」');em.style.cssText='text-align:center;padding:32px;color:var(--text3);font-size:13px';
+    cc.appendChild(em);
+  } else {
+    var grid=mk('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px';
+    g.children.forEach(function(e){
+      var card=mk('div','company-card');
+      card.onclick=(function(gid,eid){return function(){selectCompany(gid,eid);};})(g.id,e.id);
+      var av2=mk('div','',e.name.charAt(0));av2.style.cssText='width:34px;height:34px;border-radius:8px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--accent);margin-bottom:9px';
+      var nm2=mk('div','',e.name);nm2.style.cssText='font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3';
+      var sb2=mk('div','',e.reg+' · '+e.type);sb2.style.cssText='font-size:11px;color:var(--text3);margin-bottom:8px';
+      var ft=mk('div');ft.style.cssText='display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--border)';
+      var cl=mk('span','',e.cats.length+' 个分类');cl.style.cssText='font-size:12px;color:var(--text3)';
+      var ar2=mk('span','','查看 ›');ar2.style.cssText='font-size:11px;color:var(--accent);font-weight:500';
+      ft.appendChild(cl);ft.appendChild(ar2);
+      card.appendChild(av2);card.appendChild(nm2);card.appendChild(sb2);card.appendChild(ft);
+      grid.appendChild(card);
+    });
+    cc.appendChild(grid);
+  }
+  er.appendChild(cc);
+}
+function selectCompany(gid,eid){
+  curGrpId=gid;curCoId=eid;renderGroupList();
+  var g=E.find(function(x){return x.id===gid;});
+  var e=g&&g.children.find(function(x){return x.id===eid;});
+  if(g&&e)showCompanyDetail(g,e);
+}
+function showCompanyDetail(g,e){
+  var er=q('entity-right');er.innerHTML='';
+  // Breadcrumb
+  var bc=mk('div');bc.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:14px;font-size:13px';
+  var bl=mk('span','',g.icon+' '+g.name);bl.style.cssText='cursor:pointer;color:var(--accent);font-weight:500';
+  bl.onclick=function(){selectGroup(g.id);};
+  var bs=mk('span','','›');bs.style.color='var(--text3)';
+  var bc2=mk('span','',e.name);bc2.style.fontWeight='600';
+  bc.appendChild(bl);bc.appendChild(bs);bc.appendChild(bc2);er.appendChild(bc);
+  // Company header
+  var hc=mk('div','card');
+  var hrow=mk('div');hrow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
+  var li=mk('div');li.style.cssText='display:flex;align-items:center;gap:11px';
+  var av=mk('div','',e.name.charAt(0));av.style.cssText='width:40px;height:40px;border-radius:9px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--accent)';
+  var inf=mk('div');
+  var nm=mk('div','',e.name);nm.style.cssText='font-size:16px;font-weight:700';
+  inf.appendChild(nm);
+  if(e.uen){var un=mk('div','','UEN: '+e.uen);un.style.cssText='font-size:12px;color:var(--text3);margin-top:2px';inf.appendChild(un);}
+  li.appendChild(av);li.appendChild(inf);
+  var ar=mk('div');ar.style.cssText='display:flex;gap:8px';
+  var bE2=mk('button','btn btn-ghost','✏ 编辑');bE2.style.fontSize='12px';bE2.onclick=function(){openEntityForm(g.id,e.id);};
+  var bD2=mk('button','btn btn-danger','删除');bD2.style.fontSize='12px';bD2.onclick=function(){deleteEntity(g.id,e.id);};
+  ar.appendChild(bE2);ar.appendChild(bD2);
+  hrow.appendChild(li);hrow.appendChild(ar);hc.appendChild(hrow);
+  var sg=mk('div');sg.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-top:12px;border-top:1px solid var(--border)';
+  function fi2(l,v){var d=mk('div');var lb=mk('div','form-label',l);var vl=mk('div','',v);vl.style.cssText='font-size:13px;margin-top:3px';d.appendChild(lb);d.appendChild(vl);return d;}
+  sg.appendChild(fi2('注册地',e.reg));sg.appendChild(fi2('公司类型',e.type));sg.appendChild(fi2('备注',e.note||'--'));
+  hc.appendChild(sg);er.appendChild(hc);
+  // Contracts for this company
+  var conList=C.filter(function(c){return c.company===(g.id+':'+e.id);});
+  if(conList.length){
+    var clCard=mk('div','card');
+    var clSt=mk('div','section-title');
+    clSt.appendChild(mk('span','','该公司合同（'+conList.length+'份）'));
+    var clBtn=mk('button','btn btn-ghost','前往完整列表');
+    clBtn.style.cssText='font-size:11px;padding:3px 8px';
+    clBtn.onclick=function(){navTo('contracts');};
+    clSt.appendChild(clBtn);
+    clCard.appendChild(clSt);
+    var tbl=document.createElement('table');
+    tbl.style.cssText='width:100%;border-collapse:collapse';
+    var thead=document.createElement('thead');
+    var htr=document.createElement('tr');
+    ['合同名称','状态','到期日期','操作'].forEach(function(h){
+      var th=document.createElement('th');
+      th.style.cssText='padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;background:var(--surface2);border-bottom:1px solid var(--border)';
+      th.textContent=h;htr.appendChild(th);
+    });
+    thead.appendChild(htr);tbl.appendChild(thead);
+    var tbody2=document.createElement('tbody');
+    conList.forEach(function(ct){
+      var tr=document.createElement('tr');
+      tr.style.cssText='border-bottom:1px solid rgba(0,0,0,.04);transition:background .1s';
+      tr.onmouseover=function(){this.style.background='var(--al)';};
+      tr.onmouseout=function(){this.style.background='';};
+      var tdN=mk('td');tdN.style.padding='9px 10px';
+      var nmEl=mk('div','',ct.name);nmEl.style.cssText='font-weight:500;color:var(--accent);cursor:pointer;font-size:12px';
+      nmEl.onclick=(function(id){return function(){openContractDetail(id);};})(ct.id);
+      var cidEl=mk('div','',ct.id);cidEl.style.cssText='font-size:10px;color:var(--text3);font-family:"JetBrains Mono",monospace;margin-top:1px';
+      tdN.appendChild(nmEl);tdN.appendChild(cidEl);
+      var tdS=mk('td');tdS.style.padding='9px 10px';
+      tdS.appendChild(mk('span','badge '+(SB[ct.status]||'b-active'),SL[ct.status]||ct.status));
+      var tdDe=mk('td','',ct.end||'--');
+      tdDe.style.cssText='padding:9px 10px;font-size:11px;color:var(--text3);font-family:"JetBrains Mono",monospace';
+      if(ct.status==='expiring')tdDe.style.color='var(--orange)';
+      var tdA=mk('td');tdA.style.padding='9px 10px';
+      var btns2=mk('div','act-btns');
+      var lf=null;
+      if(ct.versions&&ct.versions.length){
+        var fv=ct.versions.filter(function(v){return v.type==='final'&&(v.fileData||v.hasFile);});
+        if(fv.length)lf=fv[fv.length-1];
+        else{var av=ct.versions.filter(function(v){return v.fileData||v.hasFile;});if(av.length)lf=av[av.length-1];}
+      }
+      if(lf){
+        var dl=mk('button','act-btn','⬇');dl.title='下载';
+        dl.onclick=(function(v){return function(ev){ev.stopPropagation();downloadContractFile(v);};})(lf);
+        var pv=mk('button','act-btn','👁');pv.title='预览';
+        pv.onclick=(function(v){return function(ev){ev.stopPropagation();previewContractFile(v);};})(lf);
+        btns2.appendChild(dl);btns2.appendChild(pv);
+      }
+      var bEd=mk('button','act-btn','编辑');
+      bEd.onclick=(function(id){return function(ev){ev.stopPropagation();openContractForm(id);};})(ct.id);
+      btns2.appendChild(bEd);tdA.appendChild(btns2);
+      [tdN,tdS,tdDe,tdA].forEach(function(td){tr.appendChild(td);});
+      tbody2.appendChild(tr);
+    });
+    tbl.appendChild(tbody2);clCard.appendChild(tbl);
+    er.appendChild(clCard);
+  }
+
+  // Categories
+  var cc=mk('div','card');
+  var st=mk('div','section-title','合同分类');
+  var ab=mk('button','btn btn-ghost','＋ 添加分类');ab.style.cssText='font-size:11px;padding:3px 8px';
+  ab.onclick=function(){openCatForm(g.id,e.id,null);};
+  st.appendChild(ab);cc.appendChild(st);
+  if(!e.cats.length){
+    var em=mk('div','','暂无分类');em.style.cssText='text-align:center;padding:32px;color:var(--text3);font-size:13px';
+    cc.appendChild(em);
+  } else {
+    var cg=mk('div','cat-grid');
+    e.cats.forEach(function(c){
+      var card=mk('div','cat-card');
+      var acts=mk('div','cat-actions');
+      var bce=mk('button','cat-action-btn','✏');
+      bce.onclick=(function(gid,eid,cid){return function(ev){ev.stopPropagation();openCatForm(gid,eid,cid);};})(g.id,e.id,c.id);
+      var bcd=mk('button','cat-action-btn del','×');
+      bcd.onclick=(function(gid,eid,cid){return function(ev){ev.stopPropagation();deleteCat(gid,eid,cid);};})(g.id,e.id,c.id);
+      acts.appendChild(bce);acts.appendChild(bcd);card.appendChild(acts);
+      var ci=mk('div','',c.icon);ci.style.cssText='font-size:24px;margin-bottom:7px';
+      var cn2=mk('div','',c.name);cn2.style.cssText='font-size:13px;font-weight:600;margin-bottom:3px';
+      var cnt=mk('div','',c.count+' 份合同');cnt.style.cssText='font-size:12px;color:var(--text3)';
+      card.appendChild(ci);card.appendChild(cn2);card.appendChild(cnt);
+      cg.appendChild(card);
+    });
+    cc.appendChild(cg);
+  }
+  er.appendChild(cc);
+}
+// Group CRUD
+function openGroupForm(id){
+  editGrpId=id||null;selGrpIcon='🏛';
+  setText('gf-title',id?'编辑集团':'添加集团');
+  var g=id?E.find(function(x){return x.id===id;}):null;
+  setVal('gf-name',g?g.name:'');setVal('gf-note',g?g.note:'');
+  if(g)selGrpIcon=g.icon;
+  renderIconPicker('group-icon-picker',GRP_ICONS,selGrpIcon,function(ic){selGrpIcon=ic;renderIconPicker('group-icon-picker',GRP_ICONS,ic,arguments.callee);});
+  openModal('modal-group-form');
+}
+function saveGroup(){
+  var name=getVal('gf-name').trim();if(!name){alert('请填写集团名称');return;}
+  if(editGrpId){
+    var g=E.find(function(x){return x.id===editGrpId;});
+    if(g){g.name=name;g.icon=selGrpIcon;g.note=getVal('gf-note').trim();}
+    if(curGrpId===editGrpId&&!curCoId)showCompanyList(g);
+  } else {
+    var ng={id:++M.nextGId,name:name,icon:selGrpIcon,note:getVal('gf-note').trim(),children:[]};
+    E.push(ng);curGrpId=ng.id;
+  }
+  save(SK.E,E);save(SK.M,M);closeModal('modal-group-form');renderGroupList();
+  if(editGrpId&&curGrpId===editGrpId&&!curCoId){var gg=E.find(function(x){return x.id===editGrpId;});if(gg)showCompanyList(gg);}
+  if(!editGrpId){var ng2=E[E.length-1];selectGroup(ng2.id);}
+}
+function deleteGroup(gid){
+  var g=E.find(function(x){return x.id===gid;});
+  if(!g||!confirm('确定删除集团「'+g.name+'」？'))return;
+  E=E.filter(function(x){return x.id!==gid;});
+  if(curGrpId===gid){curGrpId=null;curCoId=null;}
+  save(SK.E,E);renderGroupList();
+  var er=q('entity-right');er.innerHTML='';
+  var ph=mk('div','placeholder-empty');
+  ph.appendChild(mk('div','placeholder-icon','🏢'));
+  ph.appendChild(mk('div','placeholder-text','请选择左侧集团'));
+  er.appendChild(ph);
+}
+// Company CRUD
+function openEntityForm(gid,eid){
+  editGrpId=gid||curGrpId;editCoId=eid||null;
+  setText('ef-title',eid?'编辑子公司':'添加子公司');
+  var g=E.find(function(x){return x.id===editGrpId;});
+  var e=eid&&g?g.children.find(function(x){return x.id===eid;}):null;
+  setVal('ef-name',e?e.name:'');setVal('ef-uen',e?e.uen:'');setVal('ef-note',e?e.note:'');
+  if(e){setOpt('ef-reg',e.reg);setOpt('ef-type',e.type);}
+  openModal('modal-entity-form');
+}
+function saveEntity(){
+  var name=getVal('ef-name').trim();if(!name){alert('请填写公司名称');return;}
+  var g=E.find(function(x){return x.id===editGrpId;});if(!g){alert('请先选择所属集团');return;}
+  var data={name:name,uen:getVal('ef-uen').trim(),reg:getVal('ef-reg'),type:getVal('ef-type'),note:getVal('ef-note').trim()};
+  if(editCoId){
+    var e=g.children.find(function(x){return x.id===editCoId;});if(e)Object.assign(e,data);
+    save(SK.E,E);save(SK.M,M);closeModal('modal-entity-form');renderGroupList();showCompanyDetail(g,e);
+  } else {
+    data.id=++M.nextEId;data.cats=[];g.children.push(data);
+    save(SK.E,E);save(SK.M,M);closeModal('modal-entity-form');selectCompany(editGrpId,data.id);
+  }
+}
+function deleteEntity(gid,eid){
+  var g=E.find(function(x){return x.id===gid;});
+  var e=g&&g.children.find(function(x){return x.id===eid;});
+  if(!e||!confirm('确定删除「'+e.name+'」？'))return;
+  g.children=g.children.filter(function(x){return x.id!==eid;});
+  if(curCoId===eid)curCoId=null;
+  save(SK.E,E);renderGroupList();showCompanyList(g);
+}
+// Category CRUD
+function openCatForm(gid,eid,cid){
+  editCatGid=gid;editCatEid=eid;editCatCid=cid||null;
+  setText('catf-title',cid?'编辑分类':'添加分类');
+  var g=E.find(function(x){return x.id===gid;});
+  var e=g&&g.children.find(function(x){return x.id===eid;});
+  var c=cid&&e?e.cats.find(function(x){return x.id===cid;}):null;
+  setVal('catf-name',c?c.name:'');
+  selCatIcon=c?c.icon:'📋';
+  renderIconPicker('cat-icon-picker',CAT_ICONS,selCatIcon,function(ic){selCatIcon=ic;renderIconPicker('cat-icon-picker',CAT_ICONS,ic,arguments.callee);});
+  openModal('modal-cat-form');
+}
+function saveCat(){
+  var name=getVal('catf-name').trim();if(!name){alert('请填写分类名称');return;}
+  var g=E.find(function(x){return x.id===editCatGid;});if(!g)return;
+  var e=g.children.find(function(x){return x.id===editCatEid;});if(!e)return;
+  if(editCatCid){
+    var c=e.cats.find(function(x){return x.id===editCatCid;});if(c){c.name=name;c.icon=selCatIcon;}
+  } else {e.cats.push({id:++M.nextCId,name:name,icon:selCatIcon,count:0});}
+  save(SK.E,E);save(SK.M,M);closeModal('modal-cat-form');
+  showCompanyDetail(g,e);
+}
+function deleteCat(gid,eid,cid){
+  var g=E.find(function(x){return x.id===gid;});
+  var e=g&&g.children.find(function(x){return x.id===eid;});
+  var c=e&&e.cats.find(function(x){return x.id===cid;});
+  if(!c||!confirm('删除分类「'+c.name+'」？'))return;
+  e.cats=e.cats.filter(function(x){return x.id!==cid;});
+  save(SK.E,E);showCompanyDetail(g,e);
+}
+
+// ── Templates ───────────────────────────────────────────
+function renderTplList(){
+  var el=q('tpl-folder-list');if(!el)return;
+  el.innerHTML='';
+  if(!T.length){var em=mk('div','','暂无文件夹');em.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px';el.appendChild(em);return;}
+  T.forEach(function(f){
+    var item=mk('div','list-item'+(f.id===curTplId?' active':''));
+    var icon=mk('span','',f.icon);icon.style.fontSize='18px';
+    var info=mk('div');info.style.cssText='min-width:0;flex:1';
+    var nm=mk('div','list-item-name',f.name);nm.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    var sub=mk('div','list-item-sub',f.files.length+' 个模板');
+    info.appendChild(nm);info.appendChild(sub);
+    item.appendChild(icon);item.appendChild(info);
+    item.onclick=(function(fid){return function(){selectTplFolder(fid);};})(f.id);
+    el.appendChild(item);
+  });
+}
+function selectTplFolder(fid){
+  curTplId=fid;renderTplList();
+  var f=T.find(function(x){return x.id===fid;});if(f)showTplDetail(f);
+}
+function showTplDetail(f){
+  var er=q('tpl-right');er.innerHTML='';
+  var hc=mk('div','card');
+  var hrow=mk('div');hrow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
+  var li=mk('div');li.style.cssText='display:flex;align-items:center;gap:11px';
+  var ic=mk('div','',f.icon);ic.style.cssText='font-size:28px';
+  var inf=mk('div');
+  var nm=mk('div','',f.name);nm.style.cssText='font-size:17px;font-weight:700';
+  var nt=mk('div','',f.desc||'');nt.style.cssText='font-size:12px;color:var(--text3);margin-top:2px';
+  inf.appendChild(nm);inf.appendChild(nt);li.appendChild(ic);li.appendChild(inf);
+  var ar=mk('div');ar.style.cssText='display:flex;gap:8px';
+  var be=mk('button','btn btn-ghost','✏ 编辑');be.style.fontSize='12px';be.onclick=function(){openTplFolderForm(f.id);};
+  var ba=mk('button','btn btn-primary','＋ 添加模板');ba.style.fontSize='12px';ba.onclick=function(){openTplFileForm(f.id,null);};
+  var bd=mk('button','btn btn-danger','删除文件夹');bd.style.fontSize='12px';bd.onclick=function(){deleteTplFolder(f.id);};
+  ar.appendChild(be);ar.appendChild(ba);ar.appendChild(bd);
+  hrow.appendChild(li);hrow.appendChild(ar);hc.appendChild(hrow);er.appendChild(hc);
+  var cc=mk('div','card');
+  var st=mk('div','section-title','模板文件');cc.appendChild(st);
+  if(!f.files.length){var em=mk('div','','暂无模板');em.style.cssText='text-align:center;padding:32px;color:var(--text3);font-size:13px';cc.appendChild(em);}
+  else {
+    var grid=mk('div','cat-grid');
+    f.files.forEach(function(t){
+      var card=mk('div','cat-card');
+      var acts=mk('div','cat-actions');
+      var be2=mk('button','cat-action-btn','✏');
+      be2.onclick=(function(fid,tid){return function(ev){ev.stopPropagation();openTplFileForm(fid,tid);};})(f.id,t.id);
+      var bd2=mk('button','cat-action-btn del','×');
+      bd2.onclick=(function(fid,tid){return function(ev){ev.stopPropagation();deleteTplFile(fid,tid);};})(f.id,t.id);
+      acts.appendChild(be2);acts.appendChild(bd2);card.appendChild(acts);
+      var ti=mk('div','',TI[t.type]||'📋');ti.style.cssText='font-size:22px;margin-bottom:6px';
+      var tn=mk('div','',t.name);tn.style.cssText='font-size:13px;font-weight:600;margin-bottom:6px';
+      var tb=mk('div');tb.style.cssText='display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px';
+      var tl=mk('span','',t.type);tl.style.cssText='font-size:10px;padding:1px 6px;border-radius:8px;background:var(--accent-light);color:var(--accent);font-weight:600';
+      var lg=mk('span','',t.lang);lg.style.cssText='font-size:10px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--text3)';
+      tb.appendChild(tl);tb.appendChild(lg);
+      if(t.ver){var vr=mk('span','',t.ver);vr.style.cssText='font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text3)';tb.appendChild(vr);}
+      var ad=mk('div','','添加于 '+t.added);ad.style.cssText='font-size:10px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)';
+      card.appendChild(ti);card.appendChild(tn);card.appendChild(tb);card.appendChild(ad);
+      // File row with download button - always visible
+      var fileRow=mk('div');fileRow.style.cssText='margin-top:8px;display:flex;align-items:center;gap:6px';
+      if(t.fileData||t.hasFile){
+        var fic=mk('span','',t.fileType&&t.fileType.includes('pdf')?'📄':'📝');fic.style.fontSize='13px';
+        var fnm=mk('span','',t.fileName||t.name);fnm.style.cssText='font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        var dlb=mk('button','btn btn-primary','⬇ 下载');dlb.style.cssText='font-size:11px;padding:3px 8px;flex-shrink:0';
+        dlb.onclick=(function(fid,tid){return function(ev){ev.stopPropagation();downloadTplFile(fid,tid);};})(f.id,t.id);
+        fileRow.appendChild(fic);fileRow.appendChild(fnm);fileRow.appendChild(dlb);
+      } else {
+        var nof=mk('span','','未上传文件');nof.style.cssText='font-size:11px;color:var(--text3);font-style:italic';
+        fileRow.appendChild(nof);
+      }
+      card.appendChild(fileRow);
+      grid.appendChild(card);
+    });
+    cc.appendChild(grid);
+  }
+  er.appendChild(cc);
+}
+function openTplFolderForm(id){
+  editTplId=id||null;selTplIcon='📁';
+  setText('tff-title',id?'编辑文件夹':'新建文件夹');
+  var f=id?T.find(function(x){return x.id===id;}):null;
+  setVal('tff-name',f?f.name:'');setVal('tff-desc',f?f.desc:'');
+  if(f)selTplIcon=f.icon;
+  renderIconPicker('tpl-icon-picker',TPL_ICONS,selTplIcon,function(ic){selTplIcon=ic;renderIconPicker('tpl-icon-picker',TPL_ICONS,ic,arguments.callee);});
+  openModal('modal-tpl-folder-form');
+}
+function saveTplFolder(){
+  var name=getVal('tff-name').trim();if(!name){alert('请填写文件夹名称');return;}
+  if(editTplId){
+    var f=T.find(function(x){return x.id===editTplId;});
+    if(f){f.name=name;f.icon=selTplIcon;f.desc=getVal('tff-desc').trim();}
+    if(curTplId===editTplId)showTplDetail(f);
+  } else {
+    var nf={id:++M.nextFId,name:name,icon:selTplIcon,desc:getVal('tff-desc').trim(),files:[]};
+    T.push(nf);curTplId=nf.id;
+  }
+  save(SK.T,T);save(SK.M,M);closeModal('modal-tpl-folder-form');renderTplList();
+  if(!editTplId){var nf2=T[T.length-1];selectTplFolder(nf2.id);}
+}
+function deleteTplFolder(fid){
+  var f=T.find(function(x){return x.id===fid;});
+  if(!f||!confirm('确定删除文件夹「'+f.name+'」？'))return;
+  T=T.filter(function(x){return x.id!==fid;});if(curTplId===fid)curTplId=null;
+  save(SK.T,T);renderTplList();
+  var er=q('tpl-right');er.innerHTML='';
+  var ph=mk('div','placeholder-empty');ph.appendChild(mk('div','placeholder-icon','📁'));ph.appendChild(mk('div','placeholder-text','请选择左侧文件夹'));er.appendChild(ph);
+}
+function openTplFileForm(fid,tid){
+  editTplId=fid;editTplFid=tid||null;
+  setText('tpff-title',tid?'编辑模板':'添加模板');
+  var f=T.find(function(x){return x.id===fid;});
+  var t=tid&&f?f.files.find(function(x){return x.id===tid;}):null;
+  setVal('tpff-name',t?t.name:'');setVal('tpff-ver',t?t.ver:'');setVal('tpff-note',t?t.note:'');
+  if(t){setOpt('tpff-type',t.type);setOpt('tpff-lang',t.lang);}
+  // Reset file upload state
+  tplFileData=null;
+  var ph=q('tpff-file-placeholder'),sel=q('tpff-file-selected'),inp=q('tpff-file-input');
+  if(ph)ph.style.display='block';if(sel)sel.style.display='none';if(inp)inp.value='';
+  // If editing and has existing file, show it
+  if(t&&t.fileName){
+    if(ph)ph.style.display='none';if(sel)sel.style.display='block';
+    setText('tpff-file-name',t.fileName);
+    setText('tpff-file-size',t.fileSize?Math.round(t.fileSize/1024)+'KB (已存储)':'已存储');
+  }
+  openModal('modal-tpl-file-form');
+}
+function saveTplFile(){
+  var name=getVal('tpff-name').trim();
+  // Use file name if name is empty
+  if(!name&&tplFileData) name=tplFileData.name.replace(/\.(pdf|docx|doc)$/i,'');
+  if(!name){alert('请填写模板名称或先上传文件');return;}
+  var f=T.find(function(x){return x.id===editTplId;});if(!f)return;
+  var data={name:name,type:getVal('tpff-type'),lang:getVal('tpff-lang'),ver:getVal('tpff-ver').trim(),note:getVal('tpff-note').trim(),added:today()};
+  // Store file data if uploaded
+  if(tplFileData){
+    var tid2='tpl_'+Date.now();
+    data.fileName=tplFileData.name;
+    data.fileSize=tplFileData.size;
+    data.fileType=tplFileData.type;
+    data.fileId=tid2;data.hasFile=true;
+    (function(capturedTid){
+      uploadToStorage(capturedTid,{id:capturedTid,name:tplFileData.name,size:tplFileData.size,
+        type:tplFileData.type,dataUrl:tplFileData.b64}).then(function(r){
+        if(r&&r.url){var tf=T.find(function(x){return x.id===editTplId;});
+          if(tf){var targetFile=editTplFid?tf.files.find(function(x){return x.id===editTplFid;}):tf.files[tf.files.length-1];
+            if(targetFile){targetFile.storageUrl=r.url;save(SK.T,T);}}}
+      });
+    })(tid2);
+  }
+  if(editTplFid){
+    var t=f.files.find(function(x){return x.id===editTplFid;});
+    if(t){
+      // Keep existing file if no new file uploaded
+      if(!tplFileData&&t.fileData){data.fileData=t.fileData;data.fileName=t.fileName;data.fileSize=t.fileSize;data.fileType=t.fileType;}
+      Object.assign(t,data);
+    }
+  } else {
+    data.id=++M.nextTId;f.files.push(data);
+  }
+  save(SK.T,T);save(SK.M,M);closeModal('modal-tpl-file-form');showTplDetail(f);
+}
+
+function downloadTplFile(fid,tid){
+  var f=T.find(function(x){return x.id===fid;});
+  var t=f&&f.files.find(function(x){return x.id===tid;});
+  if(!t||(!t.fileData&&!t.hasFile)){alert('此模板没有上传文件');return;}
+  if(t.storageUrl){ window.open(t.storageUrl+'?download=1','_blank'); return; }
+  if(t.fileData){ _triggerDownload(t.fileData, t.fileName||t.name); return; }
+  alert('文件未找到，可能需要重新上传');
+}
+function deleteTplFile(fid,tid){
+  var f=T.find(function(x){return x.id===fid;});
+  var t=f&&f.files.find(function(x){return x.id===tid;});
+  if(!t||!confirm('删除模板「'+t.name+'」？'))return;
+  f.files=f.files.filter(function(x){return x.id!==tid;});save(SK.T,T);showTplDetail(f);
+}
+
+// ── Contract file download ────────────────────────────────
+function _triggerDownload(dataUrl, fileName){
+  try {
+    var arr=dataUrl.split(',');
+    var mime=arr[0].match(/:(.*?);/)[1];
+    var bstr=atob(arr[1]);var n=bstr.length;var u8=new Uint8Array(n);
+    for(var i=0;i<n;i++) u8[i]=bstr.charCodeAt(i);
+    var blob=new Blob([u8],{type:mime});
+    var blobUrl=URL.createObjectURL(blob);
+    var a=document.createElement('a');a.href=blobUrl;a.download=fileName||'contract';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(blobUrl);},1000);
+  } catch(e){
+    var a=document.createElement('a');a.href=dataUrl;a.download=fileName||'contract';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }
+}
+
+function downloadContractFile(ver){
+  if(!ver){alert('此版本没有上传文件');return;}
+  if(ver.storageUrl){ window.open(ver.storageUrl+'?download=1','_blank'); return; }
+  if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
+  if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
+  alert('文件未找到，可能需要重新上传');
+}
+
+function previewContractFile(ver){
+  if(!ver){alert('此版本没有上传文件');return;}
+  if(ver.storageUrl){ window.open(ver.storageUrl,'_blank'); return; }
+  if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
+  var doPreview=function(dataUrl,fileType,fileName){
+    // Convert data URL to Blob URL — more reliable than writing iframe
+    try {
+      var arr=dataUrl.split(',');
+      var mime=arr[0].match(/:(.*?);/)[1];
+      var bstr=atob(arr[1]);
+      var n=bstr.length;
+      var u8=new Uint8Array(n);
+      for(var i=0;i<n;i++) u8[i]=bstr.charCodeAt(i);
+      var blob=new Blob([u8],{type:mime});
+      var blobUrl=URL.createObjectURL(blob);
+      if(fileType&&fileType.includes('pdf')){
+        // Open PDF in new tab using blob URL
+        window.open(blobUrl,'_blank');
+      } else {
+        // Word: download directly
+        var a=document.createElement('a');
+        a.href=blobUrl;a.download=fileName||'contract';
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setTimeout(function(){URL.revokeObjectURL(blobUrl);},1000);
+      }
+    } catch(e){
+      // Fallback: use data URL directly
+      var a=document.createElement('a');
+      a.href=dataUrl;a.download=fileName||'contract';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+    }
+  };
+  if(ver.fileData){ doPreview(ver.fileData,ver.fileType,ver.fileName); return; }
+  loadFile(ver.id).then(function(f){
+    if(!f){alert('文件未找到，可能已被清除');return;}
+    doPreview(f.dataUrl,f.type,f.name);
+  });
+}
+
+// Also add file upload to version form
+function openVersionForm(){
+  setVal('vf-date',today());
+  setVal('vf-ver','');
+  setVal('vf-note','');
+  var sel=q('vf-type');if(sel)sel.selectedIndex=0;
+  // Reset file upload state
+  versionFileData=null;
+  var idle=q('vf-file-idle'),done=q('vf-file-done'),inp=q('vf-file-input');
+  if(idle)idle.style.display='block';
+  if(done)done.style.display='none';
+  if(inp)inp.value='';
+  openModal('modal-version-form');
+}
+
+function handleVfDrop(e){
+  e.preventDefault();
+  var zone=q('vf-upload-zone');if(zone)zone.style.borderColor='var(--border)';
+  var f=e.dataTransfer.files[0];if(f)handleVfFile(f);
+}
+
+function handleVfFile(f){
+  if(!f)return;
+  if(!f.name.match(/\.(pdf|docx|doc)$/i)){alert('请上传 PDF 或 Word 文件');return;}
+  if(f.size>20*1024*1024){alert('文件不能超过 20MB');return;}
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    versionFileData={name:f.name,size:f.size,type:f.type,dataUrl:ev.target.result};
+    var idle=q('vf-file-idle'),done=q('vf-file-done');
+    if(idle)idle.style.display='none';
+    if(done){done.style.display='block';done.textContent='✅ '+f.name+' ('+(f.size/1024).toFixed(0)+' KB)';}
+  };
+  reader.readAsDataURL(f);
+}
+
+function saveVersion(){
+  var date=getVal('vf-date');if(!date){alert('请填写日期');return;}
+  // Always find contract fresh from C array
+  var idx=C.findIndex(function(x){return x.id===curViewCid;});
+  if(idx===-1){alert('找不到合同，请关闭后重试');return;}
+  if(!C[idx].versions)C[idx].versions=[];
+  var vid='v'+Date.now();
+  var ver={
+    id:vid,
+    type:getVal('vf-type'),
+    ver:getVal('vf-ver').trim(),
+    date:date,
+    note:getVal('vf-note').trim()
+  };
+  if(versionFileData){
+    ver.fileName=versionFileData.name;
+    ver.fileSize=versionFileData.size;
+    ver.fileType=versionFileData.type;
+    ver.hasFile=true;
+    uploadToStorage(vid,{id:vid,name:versionFileData.name,size:versionFileData.size,
+      type:versionFileData.type,dataUrl:versionFileData.dataUrl}).then(function(r){
+      if(r&&r.url){var ci=C.findIndex(function(x){return x.id===curViewCid;});
+        if(ci!==-1){var vi=C[ci].versions.findIndex(function(v){return v.id===vid;});
+          if(vi!==-1){C[ci].versions[vi].storageUrl=r.url;save(SK.C,C);}}}
+    });
+  }
+  C[idx].versions.push(ver);
+  save(SK.C,C);
+  versionFileData=null;
+  closeModal('modal-version-form');
+  // Re-render versions with fresh object from C
+  renderVersions(C[idx]);
+}
+
+
+// ── Company selector helper ───────────────────────────────
+function buildCompanyOptions(selectId, selectedVal){
+  var sel = q(selectId); if(!sel) return;
+  sel.innerHTML = '';
+
+  // Check if any group has subsidiaries
+  var hasAny = E.some(function(g){ return g.children && g.children.length > 0; });
+
+  if(!hasAny){
+    var hint = document.createElement('option');
+    hint.value = '';
+    hint.textContent = '— 请先在「公司主体」添加子公司 —';
+    hint.disabled = true;
+    sel.appendChild(hint);
+    return;
+  }
+
+  var blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— 不指定 —';
+  sel.appendChild(blank);
+
+  E.forEach(function(g){
+    if(!g.children || !g.children.length) return;
+    var og = document.createElement('optgroup');
+    og.label = g.icon + ' ' + g.name;
+    g.children.forEach(function(e){
+      var o = document.createElement('option');
+      o.value = g.id + ':' + e.id;
+      o.textContent = e.name;
+      if(selectedVal === o.value) o.selected = true;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+
+  if(selectedVal) sel.value = selectedVal;
+}
+
+function getCompanyLabel(val){
+  if(!val) return '';
+  var parts = val.split(':');
+  var g = E.find(function(x){ return x.id === parseInt(parts[0]); });
+  if(!g) return '';
+  var e = g.children && g.children.find(function(x){ return x.id === parseInt(parts[1]); });
+  return e ? (g.icon + ' ' + g.name + ' · ' + e.name) : '';
+}
+
+
+// ── Calendar & Alerts ────────────────────────────────────
+
+// ── Calendar ─────────────────────────────────────────────
+var calYear  = new Date().getFullYear();
+var calMonth = new Date().getMonth(); // 0-indexed
+
+function renderCalendar(){
+  renderCalGrid();
+  renderCalExpiring();
+}
+
+function calPrev(){ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalGrid(); renderCalExpiring(); }
+function calNext(){ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalGrid(); renderCalExpiring(); }
+
+function renderCalGrid(){
+  var grid = q('cal-grid'); if(!grid) return;
+  // Keep the header labels, rebuild day cells
+  var labels = Array.from(grid.querySelectorAll('.cal-day-label'));
+  grid.innerHTML = '';
+  labels.forEach(function(l){ grid.appendChild(l.cloneNode(true)); });
+
+  var monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  setText('cal-month-label', calYear+'年 '+monthNames[calMonth]);
+
+  // Build set of expiring dates this month (key: YYYY-MM-DD)
+  var expiryDates = {};
+  C.forEach(function(c){
+    if(!c.end) return;
+    var d = daysTo(c.end);
+    if(d === null) return;
+    // Mark if it falls in displayed month
+    var ed = new Date(c.end);
+    if(ed.getFullYear()===calYear && ed.getMonth()===calMonth){
+      var key = c.end;
+      if(!expiryDates[key] || d < expiryDates[key]) expiryDates[key] = d;
+    }
+  });
+
+  var today = new Date(); today.setHours(0,0,0,0);
+  var firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  var daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+
+  // Empty cells before first day
+  for(var i=0; i<firstDay; i++){
+    grid.appendChild(mk('div','cal-day'));
+  }
+
+  for(var day=1; day<=daysInMonth; day++){
+    var cell = mk('div','cal-day', String(day));
+    var dateStr = calYear+'-'+pad2(calMonth+1)+'-'+pad2(day);
+    var cellDate = new Date(calYear, calMonth, day); cellDate.setHours(0,0,0,0);
+    if(cellDate.getTime()===today.getTime()) cell.classList.add('today');
+    // Check if any contract expires on this day
+    if(expiryDates[dateStr] !== undefined){
+      var d = expiryDates[dateStr];
+      cell.classList.add('has-event');
+      if(d<=7) cell.querySelector && (cell.style.setProperty('--dot-color','var(--red)'));
+      // Override dot color via inline style on ::after - use data attr
+      cell.dataset.urgency = d<=7?'red':d<=30?'orange':'yellow';
+      // Apply color with a span trick
+      var dot = mk('span');
+      dot.style.cssText='position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:'+(d<=7?'var(--red)':d<=30?'var(--orange)':'var(--yellow)');
+      cell.style.position='relative';
+      // Remove default ::after and use span instead
+      cell.classList.remove('has-event'); // remove the css ::after
+      cell.appendChild(dot);
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function renderCalExpiring(){
+  var el = q('calendar-expiring-list'); if(!el) return;
+  el.innerHTML = '';
+  var title = mk('div','card-title', calYear+'年 '+( calMonth+1)+'月 到期事项');
+  el.appendChild(title);
+
+  // Get contracts expiring in displayed month
+  var monthContracts = C.filter(function(c){
+    if(!c.end) return false;
+    var ed = new Date(c.end);
+    return ed.getFullYear()===calYear && ed.getMonth()===calMonth;
+  }).sort(function(a,b){ return new Date(a.end)-new Date(b.end); });
+
+  if(!monthContracts.length){
+    var em = mk('div','','本月无到期合同'); em.style.cssText='text-align:center;padding:20px;color:var(--text3);font-size:13px';
+    el.appendChild(em); return;
+  }
+
+  monthContracts.forEach(function(c){
+    var d = daysTo(c.end);
+    var col = d!==null&&d<=7?'var(--red)':d!==null&&d<=30?'var(--orange)':'var(--yellow)';
+    var row = mk('div','alert-item');
+    var dot = mk('div','alert-dot'); dot.style.background=col;
+    var inf = mk('div');
+    var nm = mk('div','alert-name',c.name);
+    var ai = mk('div','alert-info', d===null?'已过期': d===0?'今天到期': d<0?Math.abs(d)+'天前已过期': d+'天后到期');
+    inf.appendChild(nm); inf.appendChild(ai);
+    var dt = mk('div','alert-date', c.end);
+    row.appendChild(dot); row.appendChild(inf); row.appendChild(dt);
+    el.appendChild(row);
+  });
+}
+
+// ── Alerts (dynamic, from real contract data) ────────────
+function renderAlerts(){
+  var el = q('alerts-list'); if(!el) return;
+  el.innerHTML='';
+
+  // Get contracts expiring within 30 days
+  var urgent = C.filter(function(c){
+    var d=daysTo(c.end);
+    return d!==null && d>=0 && d<=30;
+  }).sort(function(a,b){return new Date(a.end)-new Date(b.end);});
+
+  // Update count badge
+  var countEl = q('alerts-count');
+  if(countEl){ countEl.textContent=urgent.length?urgent.length:''; countEl.style.display=urgent.length?'':'none'; }
+
+  if(!urgent.length){
+    var em = mk('div','','近期无需处理的提醒，所有合同状态正常 ✅');
+    em.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px';
+    el.appendChild(em); return;
+  }
+
+  urgent.forEach(function(c){
+    var d = daysTo(c.end);
+    var col = d<=7?'var(--red)':'var(--orange)';
+    var icon = d<=7?'🚨':'⚠';
+    var row = mk('div','alert-item');
+    var dot = mk('div','alert-dot'); dot.style.background=col;
+    var inf = mk('div'); inf.style.flex='1';
+    var nm = mk('div','alert-name',c.name);
+    var ai = mk('div','alert-info', icon+' '+(d===0?'今天到期！':d+'天后到期')+' · '+c.party);
+    inf.appendChild(nm); inf.appendChild(ai);
+    // Action: click to view contract
+    var btn = mk('button','btn btn-ghost','查看合同'); btn.style.cssText='font-size:11px;padding:4px 9px;flex-shrink:0';
+    btn.onclick = (function(id){ return function(){ openContractDetail(id); }; })(c.id);
+    row.appendChild(dot); row.appendChild(inf); row.appendChild(btn);
+    el.appendChild(row);
+  });
+}
+
+
+// ── Icon picker ─────────────────────────────────────────
+function renderIconPicker(elId,icons,selected,onPick){
+  var el=q(elId);if(!el)return;el.innerHTML='';
+  icons.forEach(function(ic){
+    var d=mk('div','icon-opt'+(ic===selected?' selected':''),ic);
+    d.onclick=(function(icon,elem){return function(){
+      el.querySelectorAll('.icon-opt').forEach(function(x){x.classList.remove('selected');});
+      elem.classList.add('selected');
+      if(onPick)onPick(icon);
+    };})(ic,d);
+    el.appendChild(d);
+  });
+}
+
+
+// ── Template file upload ──────────────────────────────────
+var tplFileData = null; // {name, size, type, b64}
+
+function handleTplFileDrop(e){
+  e.preventDefault();
+  q('tpff-upload-zone').classList.remove('drag');
+  var f = e.dataTransfer.files[0];
+  if(f) handleTplFileSelect(f);
+}
+
+function handleTplFileSelect(file){
+  if(!file) return;
+  if(!file.name.match(/\.(pdf|docx|doc)$/i)){
+    alert('请上传 PDF 或 Word 文件'); return;
+  }
+  if(file.size > 10*1024*1024){
+    alert('文件不能超过 10MB'); return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    tplFileData = {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      b64:  e.target.result // full data URL
+    };
+    // Show selected state
+    q('tpff-file-placeholder').style.display = 'none';
+    q('tpff-file-selected').style.display = 'block';
+    setText('tpff-file-name', file.name);
+    setText('tpff-file-size', (file.size/1024).toFixed(0)+' KB');
+    // Auto-fill name if empty
+    if(!getVal('tpff-name')){
+      var n = file.name.replace(/\.(pdf|docx|doc)$/i,'');
+      setVal('tpff-name', n);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearTplFile(){
+  tplFileData = null;
+  q('tpff-file-placeholder').style.display = 'block';
+  q('tpff-file-selected').style.display = 'none';
+  q('tpff-file-input').value = '';
+}
+
+
+
+// ── Google Drive Import ──────────────────────────────────
+var DRIVE_FOLDER_ID = '1OYwUSOXVO38xW8vE5Sz-KvK-Lobyk5fC';
+var driveFiles = [];      // files fetched from Drive
+var driveResults = [];    // AI-recognized results
+var diScanning = false;
+
+function openDriveImport(){
+  driveFiles = [];
+  driveResults = [];
+  q('di-tbody').innerHTML = '';
+  q('di-file-list').style.display = 'none';
+  q('di-empty').style.display = 'block';
+  q('di-progress').style.display = 'none';
+  q('di-import-btn').style.display = 'none';
+  q('di-summary').textContent = '';
+  q('di-scan-btn').disabled = false;
+  q('di-scan-btn').textContent = '🔄 扫描文件';
+  openModal('modal-drive-import');
+}
+
+function startDriveScan(){
+  if(diScanning) return;
+  diScanning = true;
+  q('di-scan-btn').disabled = true;
+  q('di-scan-btn').textContent = '⏳ 扫描中...';
+  q('di-empty').style.display = 'none';
+  q('di-progress').style.display = 'block';
+  q('di-prog-text').textContent = '正在读取 Google Drive 文件夹...';
+  q('di-prog-count').textContent = '';
+  q('di-bar').style.width = '5%';
+
+  // 通过 Node.js 后端代理调用 Anthropic（隐藏 API Key）
+  fetch('/api/ai/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      mcp_servers: [{
+        type: 'url',
+        url: 'https://drivemcp.googleapis.com/mcp/v1',
+        name: 'google-drive'
+      }],
+      messages: [{
+        role: 'user',
+        content: 'List all PDF and Word files (mimeType contains pdf or word or document) in Google Drive folder with id "' + DRIVE_FOLDER_ID + '". Return ONLY a JSON array with objects {id, name, mimeType}. No markdown, no explanation.'
+      }]
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    // Parse file list from response
+    var text = data.content
+      ? data.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('')
+      : '';
+    try {
+      var clean = text.replace(/```json|```/g,'').trim();
+      driveFiles = JSON.parse(clean);
+    } catch(e) {
+      // Try to extract JSON array from text
+      var m = text.match(/\[[\s\S]*\]/);
+      if(m) driveFiles = JSON.parse(m[0]);
+      else { alert('无法读取文件列表：' + text.slice(0,200)); diScanning=false; q('di-scan-btn').disabled=false; q('di-scan-btn').textContent='🔄 扫描文件'; return; }
+    }
+
+    if(!driveFiles.length){
+      q('di-prog-text').textContent = '文件夹为空，请先上传合同文件到 Google Drive';
+      q('di-bar').style.width = '100%';
+      diScanning = false;
+      q('di-scan-btn').disabled = false;
+      q('di-scan-btn').textContent = '🔄 重新扫描';
+      return;
+    }
+
+    // Show file list
+    renderDriveFileRows();
+    q('di-bar').style.width = '10%';
+    q('di-prog-text').textContent = 'AI 识别中...';
+
+    // Process files one by one
+    driveResults = driveFiles.map(function(f){ return {file:f, status:'waiting', data:null}; });
+    renderDriveFileRows();
+    processNextDriveFile(0);
+  })
+  .catch(function(err){
+    alert('读取 Drive 失败：' + err.message);
+    diScanning = false;
+    q('di-scan-btn').disabled = false;
+    q('di-scan-btn').textContent = '🔄 扫描文件';
+  });
+}
+
+function processNextDriveFile(idx){
+  if(idx >= driveResults.length){
+    // All done
+    q('di-bar').style.width = '100%';
+    q('di-prog-text').textContent = '✅ 识别完成！';
+    var doneCount = driveResults.filter(function(r){return r.status==='done';}).length;
+    q('di-prog-count').textContent = doneCount + '/' + driveResults.length + ' 份识别成功';
+    q('di-import-btn').style.display = 'inline-flex';
+    q('di-import-btn').textContent = '✅ 全部导入 (' + doneCount + '份)';
+    q('di-summary').textContent = '共 ' + driveResults.length + ' 份文件，' + doneCount + ' 份识别成功';
+    diScanning = false;
+    q('di-scan-btn').disabled = false;
+    q('di-scan-btn').textContent = '🔄 重新扫描';
+    // Update step
+    q('di-s2num').style.background = '#4caf6e';
+    q('di-s2num').textContent = '✓';
+    q('di-s2lbl').style.color = '#4caf6e';
+    q('di-s3num').style.background = '#1c2a1f';
+    q('di-s3num').style.color = '#fff';
+    q('di-s3lbl').style.color = '#1c2a1f';
+    return;
+  }
+
+  driveResults[idx].status = 'processing';
+  renderDriveFileRows();
+
+  var pct = Math.round(10 + (idx / driveResults.length) * 85);
+  q('di-bar').style.width = pct + '%';
+  q('di-prog-count').textContent = (idx+1) + '/' + driveResults.length;
+
+  // 通过 Node.js 后端代理
+  fetch('/api/ai/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      mcp_servers: [{
+        type: 'url',
+        url: 'https://drivemcp.googleapis.com/mcp/v1',
+        name: 'google-drive'
+      }],
+      messages: [{
+        role: 'user',
+        content: 'Read the Google Drive file with id "' + driveResults[idx].file.id + '" and extract contract information. Return ONLY a JSON object with these fields: {"name":"合同名称","party":"对方当事人","type":"合同类型(服务协议/采购合同/租赁合同/劳务合同/保密协议/其他)","start":"签署日期YYYY-MM-DD or empty","end":"到期日期YYYY-MM-DD or empty","amount":"合同金额 or empty","notes":"简短备注 or empty"}. No markdown, no explanation.'
+      }]
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    var text = data.content
+      ? data.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('')
+      : '';
+    try {
+      var clean = text.replace(/```json|```/g,'').trim();
+      var m = clean.match(/\{[\s\S]*\}/);
+      var parsed = JSON.parse(m ? m[0] : clean);
+      driveResults[idx].status = 'done';
+      driveResults[idx].data = parsed;
+    } catch(e) {
+      driveResults[idx].status = 'error';
+      driveResults[idx].data = {name: driveResults[idx].file.name.replace(/\.(pdf|docx|doc)$/i,''), party:'', type:'其他', start:'', end:'', amount:'', notes:''};
+    }
+    renderDriveFileRows();
+    setTimeout(function(){ processNextDriveFile(idx+1); }, 500);
+  })
+  .catch(function(){
+    driveResults[idx].status = 'error';
+    driveResults[idx].data = {name: driveResults[idx].file.name.replace(/\.(pdf|docx|doc)$/i,''), party:'', type:'其他', start:'', end:'', amount:'', notes:''};
+    renderDriveFileRows();
+    setTimeout(function(){ processNextDriveFile(idx+1); }, 500);
+  });
+}
+
+function renderDriveFileRows(){
+  var tb = q('di-tbody');
+  tb.innerHTML = '';
+  q('di-file-list').style.display = driveResults.length ? 'block' : 'none';
+
+  driveResults.forEach(function(r, i){
+    var tr = document.createElement('tr');
+    tr.style.cssText = 'border-bottom:1px solid #f0f4f1';
+
+    // File name cell
+    var tdN = mk('td'); tdN.style.padding = '10px 12px';
+    var icon = r.file.mimeType && r.file.mimeType.includes('pdf') ? '📄' : '📝';
+    var nm = mk('div', '', icon + ' ' + r.file.name);
+    nm.style.cssText = 'font-size:12px;font-weight:500;color:#1c2a1f';
+    var sub = mk('div','', r.status==='waiting'?'⏳ 等待识别': r.status==='processing'?'🤖 AI 识别中...': r.status==='done'?'✅ 已识别': '⚠️ 识别失败，已使用文件名');
+    sub.style.cssText = 'font-size:10px;color:#8a9e92;margin-top:2px';
+    tdN.appendChild(nm); tdN.appendChild(sub);
+
+    // Party
+    var tdP = mk('td', '', r.data ? (r.data.party||'—') : '—');
+    tdP.style.cssText = 'padding:10px 12px;font-size:12px;color:#4a5e4f';
+
+    // End date
+    var tdE = mk('td', '', r.data ? (r.data.end||'—') : '—');
+    tdE.style.cssText = 'padding:10px 12px;font-size:11px;color:#8a9e92;font-family:monospace';
+
+    // Status badge
+    var tdS = mk('td'); tdS.style.padding = '10px 12px';
+    var colors = {waiting:'background:#f5f5f5;color:#9e9e9e', processing:'background:#fff3e0;color:#f57c00', done:'background:#e8f5e9;color:#4caf6e', error:'background:#fff8e1;color:#f57f17'};
+    var labels = {waiting:'等待中', processing:'识别中', done:'识别完成', error:'已备用'};
+    var badge = mk('span','', labels[r.status]||r.status);
+    badge.style.cssText = 'font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;' + (colors[r.status]||'');
+    tdS.appendChild(badge);
+
+    // Edit button
+    var tdA = mk('td'); tdA.style.padding = '10px 12px';
+    if(r.status === 'done' || r.status === 'error'){
+      var btn = mk('button','','编辑');
+      btn.style.cssText = 'font-size:11px;padding:3px 8px;border:1px solid #e8f0e9;border-radius:5px;background:#fff;cursor:pointer';
+      btn.onclick = (function(idx2){ return function(){ editDriveResult(idx2); }; })(i);
+      tdA.appendChild(btn);
+    }
+
+    [tdN,tdP,tdE,tdS,tdA].forEach(function(td){ tr.appendChild(td); });
+    tb.appendChild(tr);
+  });
+}
+
+function editDriveResult(idx){
+  var r = driveResults[idx];
+  if(!r || !r.data) return;
+  var d = r.data;
+  // Simple prompt-based editing
+  var newName = prompt('合同名称：', d.name||'');
+  if(newName !== null) d.name = newName;
+  var newParty = prompt('对方当事人：', d.party||'');
+  if(newParty !== null) d.party = newParty;
+  var newEnd = prompt('到期日期（YYYY-MM-DD）：', d.end||'');
+  if(newEnd !== null) d.end = newEnd;
+  renderDriveFileRows();
+}
+
+function confirmDriveImport(){
+  var toImport = driveResults.filter(function(r){ return r.data; });
+  if(!toImport.length){ alert('没有可导入的合同'); return; }
+  if(!confirm('确认导入 ' + toImport.length + ' 份合同到系统？')) return;
+
+  var now = new Date();
+  toImport.forEach(function(r){
+    var d = r.data;
+    var dateStr = now.getFullYear().toString() +
+      pad2(now.getMonth()+1) + pad2(now.getDate());
+    // Generate unique ID
+    var existing = C.filter(function(c){ return c.id.startsWith(dateStr); });
+    var seq = pad2(existing.length + 1);
+    var newId = dateStr + seq;
+    C.push({
+      id: newId,
+      name: d.name || r.file.name.replace(/\.(pdf|docx|doc)$/i,''),
+      party: d.party || '',
+      type: d.type || '其他',
+      status: 'active',
+      start: d.start || '',
+      end: d.end || '',
+      amount: d.amount || '',
+      notes: d.notes || '',
+      company: '',
+      versions: [{
+        id: 'v'+Date.now()+'_'+Math.random().toString(36).slice(2),
+        type: 'final',
+        ver: 'v1',
+        date: d.start || now.toISOString().slice(0,10),
+        note: '从 Google Drive 导入',
+        driveFileId: r.file.id,
+        fileName: r.file.name,
+        hasFile: false
+      }]
+    });
+  });
+
+  save(SK.C, C);
+  closeModal('modal-drive-import');
+  renderDashboard();
+  renderContracts();
+  alert('✅ 成功导入 ' + toImport.length + ' 份合同！');
+}
+
+
+
+// ── Duplicate Detection ──────────────────────────────────
+
+// Calculate similarity between two strings (0-1)
+function strSimilarity(a, b){
+  if(!a||!b) return 0;
+  a = a.toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g,'');
+  b = b.toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g,'');
+  if(a===b) return 1;
+  if(!a.length||!b.length) return 0;
+  // Check if one contains the other
+  if(a.includes(b)||b.includes(a)) return 0.85;
+  // Count common chars
+  var common=0;
+  var shorter=a.length<b.length?a:b;
+  var longer=a.length<b.length?b:a;
+  for(var i=0;i<shorter.length;i++){
+    if(longer.includes(shorter[i])) common++;
+  }
+  return common/longer.length;
+}
+
+// Find duplicate contracts for a given name+party
+function findDuplicates(name, party, excludeId){
+  var results=[];
+  C.forEach(function(c){
+    if(excludeId && c.id===excludeId) return;
+    var nameSim = strSimilarity(name, c.name);
+    var partySim = party && c.party ? strSimilarity(party, c.party) : 0.5;
+    var score = nameSim*0.7 + partySim*0.3;
+    if(score >= 0.65){
+      results.push({contract:c, score:Math.round(score*100)});
+    }
+  });
+  results.sort(function(a,b){return b.score-a.score;});
+  return results.slice(0,3); // top 3
+}
+
+// Show duplicate warning modal
+function showDuplicateWarning(name, party, onProceed, onMerge){
+  var dups = findDuplicates(name, party, editCid);
+  if(!dups.length){ onProceed(); return; }
+
+  // Build warning modal content
+  var overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.id = 'modal-dup-warn';
+  overlay.style.zIndex = '200';
+
+  var box = document.createElement('div');
+  box.className = 'modal';
+  box.style.cssText = 'max-width:520px;width:95%';
+
+  var html = '<div class="modal-title" style="color:#f57f17">⚠️ 发现疑似重复合同</div>';
+  html += '<div style="font-size:13px;color:#666;margin:12px 0 16px">系统检测到以下合同与你正在添加的合同可能重复：</div>';
+
+  dups.forEach(function(d){
+    html += '<div style="background:#fff8e1;border:1.5px solid #ffe082;border-radius:8px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px">';
+    html += '<span style="font-size:20px">📄</span>';
+    html += '<div style="flex:1">';
+    html += '<div style="font-size:13px;font-weight:600;color:#1c2a1f">'+d.contract.name+'</div>';
+    html += '<div style="font-size:11px;color:#8a9e92;margin-top:2px">'+d.contract.id+' · '+d.contract.party+'</div>';
+    html += '</div>';
+    html += '<span style="font-size:11px;font-weight:700;color:#f57f17;background:#fff3e0;padding:2px 8px;border-radius:8px">相似度 '+d.score+'%</span>';
+    html += '</div>';
+  });
+
+  html += '<div style="font-size:12px;color:#666;margin:14px 0 10px">你想怎么处理？</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  html += '<button class="btn btn-ghost" id="dup-cancel">取消</button>';
+  if(dups.length===1){
+    html += '<button class="btn" style="background:#ff8f00;color:#fff" id="dup-merge">添加为新版本</button>';
+  }
+  html += '<button class="btn" style="background:#c62828;color:#fff" id="dup-proceed">仍然新建合同</button>';
+  html += '</div>';
+
+  box.innerHTML = html;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Show
+  setTimeout(function(){ overlay.classList.add('open'); }, 10);
+
+  function closeWarn(){
+    overlay.classList.remove('open');
+    setTimeout(function(){ document.body.removeChild(overlay); }, 200);
+  }
+
+  document.getElementById('dup-cancel').onclick = function(){ closeWarn(); };
+  document.getElementById('dup-proceed').onclick = function(){ closeWarn(); onProceed(); };
+
+  var mergeBtn = document.getElementById('dup-merge');
+  if(mergeBtn){
+    mergeBtn.onclick = function(){
+      closeWarn();
+      onMerge(dups[0].contract);
+    };
+  }
+}
+
+// Merge new upload into existing contract as a new version
+function showDupList(name, party){
+  var dups = findDuplicates(name, party, null);
+  if(!dups.length){ alert('没有找到重复合同'); return; }
+  var msg = '以下合同与「'+name+'」疑似重复：\n\n';
+  dups.forEach(function(d){
+    msg += '· '+d.contract.name+' ('+d.score+'%)\n  '+d.contract.id+'\n\n';
+  });
+  alert(msg);
+}
+
+function mergeIntoExisting(existingContract){
+  // Open the existing contract detail and trigger add version
+  closeModal('modal-contract-form');
+  openContractDetail(existingContract.id);
+  setTimeout(function(){
+    openVersionForm();
+    // Pre-fill note
+    setVal('vf-note', '合并自重复合同');
+  }, 300);
+}
+
+// Show duplicate badges in contract list
+function markDuplicatesInList(){
+  var seen={};
+  var dupIds=[];
+  C.forEach(function(c){
+    var key = c.name.toLowerCase().replace(/\s/g,'').slice(0,10)+'_'+c.party.toLowerCase().replace(/\s/g,'').slice(0,6);
+    if(seen[key]) dupIds.push(c.id, seen[key]);
+    else seen[key]=c.id;
+  });
+  dupIds = dupIds.filter(function(v,i,a){return a.indexOf(v)===i;});
+  return dupIds;
+}
+
+
+// ── JSON Backup Import / Export ───────────────────────────
+
+function exportJSON(){
+  var n=new Date();
+  var ds=n.getFullYear()+pad2(n.getMonth()+1)+pad2(n.getDate());
+  var hs=pad2(n.getHours())+pad2(n.getMinutes());
+  // Collect all localStorage data
+  var backup={
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    data:{
+      cms_c:  localStorage.getItem('cms_c'),
+      cms_e:  localStorage.getItem('cms_e'),
+      cms_t:  localStorage.getItem('cms_t'),
+      cms_m:  localStorage.getItem('cms_m'),
+      cms_tl: localStorage.getItem('cms_tl')
+    }
+  };
+  // Also collect IndexedDB files
+  openIDB().then(function(db){
+    var tx=db.transaction(IDB_STORE,'readonly');
+    var req=tx.objectStore(IDB_STORE).getAll();
+    req.onsuccess=function(){
+      backup.files=req.result||[];
+      var json=JSON.stringify(backup,null,2);
+      _triggerDownload(
+        'data:application/json;charset=utf-8,'+encodeURIComponent(json),
+        '合同管理备份_'+ds+'_'+hs+'.json'
+      );
+    };
+    req.onerror=function(){
+      // Export without files
+      var json=JSON.stringify(backup,null,2);
+      _triggerDownload(
+        'data:application/json;charset=utf-8,'+encodeURIComponent(json),
+        '合同管理备份_'+ds+'_'+hs+'.json'
+      );
+    };
+  }).catch(function(){
+    var json=JSON.stringify(backup,null,2);
+    _triggerDownload(
+      'data:application/json;charset=utf-8,'+encodeURIComponent(json),
+      '合同管理备份_'+ds+'_'+hs+'.json'
+    );
+  });
+}
+
+function importJSON(input){
+  var file=input.files[0];
+  if(!file)return;
+  if(!confirm('导入备份将覆盖当前所有数据（合同、公司主体、模板等）。\n\n建议先导出当前数据备份。\n\n确定继续吗？')){
+    input.value='';return;
+  }
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var backup=JSON.parse(e.target.result);
+      // Validate it's our backup format
+      if(!backup.data){
+        alert('文件格式不正确，请选择由本系统导出的备份文件');
+        input.value='';return;
+      }
+      // Restore localStorage
+      var d=backup.data;
+      if(d.cms_c)  localStorage.setItem('cms_c',  d.cms_c);
+      if(d.cms_e)  localStorage.setItem('cms_e',  d.cms_e);
+      if(d.cms_t)  localStorage.setItem('cms_t',  d.cms_t);
+      if(d.cms_m)  localStorage.setItem('cms_m',  d.cms_m);
+      if(d.cms_tl) localStorage.setItem('cms_tl', d.cms_tl);
+      // Restore IndexedDB files
+      var restoreFiles=function(){
+        if(!backup.files||!backup.files.length){
+          _finishImport(backup);return;
+        }
+        openIDB().then(function(db){
+          var tx=db.transaction(IDB_STORE,'readwrite');
+          var store=tx.objectStore(IDB_STORE);
+          backup.files.forEach(function(f){ store.put(f); });
+          tx.oncomplete=function(){ _finishImport(backup); };
+          tx.onerror=function(){ _finishImport(backup); };
+        }).catch(function(){ _finishImport(backup); });
+      };
+      restoreFiles();
+    } catch(err){
+      alert('导入失败：文件解析错误\n'+err.message);
+      input.value='';
+    }
+  };
+  reader.readAsText(file);
+}
+
+function _finishImport(backup){
+  var exportedAt=backup.exportedAt?new Date(backup.exportedAt).toLocaleString('zh-CN'):'未知时间';
+  alert('✅ 导入成功！\n\n备份时间：'+exportedAt+'\n\n页面即将刷新。');
+  location.reload();
+}
+
+
+// ── Export Excel ─────────────────────────────────────────
+function exportExcel(){
+  if(typeof XLSX==='undefined'){alert('Excel导出库未加载，请检查网络连接后重试');return;}
+  var wb=XLSX.utils.book_new();
+  var cr=[['合同编号','合同名称','对方当事人','合同类型','状态','签署日期','到期日期','合同金额','备注','版本数']];
+  C.forEach(function(c){cr.push([c.id,c.name,c.party,c.type,SL[c.status]||c.status,c.start||'',c.end||'',c.amount||'',c.notes||'',(c.versions||[]).length]);});
+  var ws1=XLSX.utils.aoa_to_sheet(cr);ws1['!cols']=[10,30,20,12,10,12,12,14,30,6].map(function(w){return{wch:w};});
+  XLSX.utils.book_append_sheet(wb,ws1,'合同列表');
+  var er=[['集团名称','子公司名称','UEN','注册地','公司类型','备注','合同分类']];
+  E.forEach(function(g){
+    if(!g.children.length){er.push([g.name,'--','','','',g.note||'','']);}
+    else{g.children.forEach(function(e){er.push([g.name,e.name,e.uen||'',e.reg,e.type,e.note||'',e.cats.map(function(c){return c.name+'('+c.count+')';}).join(' / ')]);});}
+  });
+  var ws2=XLSX.utils.aoa_to_sheet(er);ws2['!cols']=[20,26,14,10,12,18,30].map(function(w){return{wch:w};});
+  XLSX.utils.book_append_sheet(wb,ws2,'公司主体');
+  var tr=[['文件夹','模板名称','合同类型','语言','版本号','备注','添加日期']];
+  T.forEach(function(f){f.files.forEach(function(t){tr.push([f.name,t.name,t.type,t.lang,t.ver||'',t.note||'',t.added||'']);});});
+  var ws3=XLSX.utils.aoa_to_sheet(tr);XLSX.utils.book_append_sheet(wb,ws3,'合同模板');
+  var n=new Date();var ds=n.getFullYear()+pad2(n.getMonth()+1)+pad2(n.getDate());
+  XLSX.writeFile(wb,'合同管理备份_'+ds+'.xlsx');
+}
+
+// ── Search ──────────────────────────────────────────────
+q('searchInput').addEventListener('input',function(){
+  var qv=this.value.trim().toLowerCase();
+  if(!qv){renderContracts();return;}
+  navTo('contracts');
+  var f=C.filter(function(c){return c.name.toLowerCase().includes(qv)||c.party.toLowerCase().includes(qv)||c.id.toLowerCase().includes(qv);});
+  var tbody=q('contracts-tbody');var empty=q('contracts-empty');
+  if(!f.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';tbody.innerHTML='';
+  f.forEach(function(c){
+    var tr=mk('tr');
+    var tdN=mk('td');var nm=mk('div','cn',c.name);nm.onclick=(function(id){return function(){openContractDetail(id);};})(c.id);var cid=mk('div','cid',c.id);tdN.appendChild(nm);tdN.appendChild(cid);
+    var tdP=mk('td','',c.party);var tdT=mk('td');tdT.appendChild(mk('span','ct',c.type));
+    // Company cell
+    var tdCo=mk('td');
+    if(c.company){
+      var coLabel=getCompanyLabel(c.company);
+      if(coLabel){var cos=mk('span','',coLabel);cos.style.cssText='font-size:11px;color:var(--accent);background:var(--al);padding:2px 7px;border-radius:10px;white-space:nowrap';tdCo.appendChild(cos);}
+    }
+    var tdS=mk('td');tdS.appendChild(mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status));
+    var tdDs=mk('td','cd',c.start||'--');var tdDe=mk('td','cd',c.end||'--');
+    var tdA=mk('td');var btns=mk('div','act-btns');
+    var bE=mk('button','act-btn','编辑');bE.onclick=(function(id){return function(){openContractForm(id);};})(c.id);
+    var bD=mk('button','act-btn del','删除');bD.onclick=(function(id){return function(){deleteContract(id);};})(c.id);
+    btns.appendChild(bE);btns.appendChild(bD);tdA.appendChild(btns);
+    [tdN,tdP,tdT,tdCo,tdS,tdDs,tdDe,tdA].forEach(function(td){tr.appendChild(td);});tbody.appendChild(tr);
+  });
+});
+
+// ── Nav & filter event listeners ────────────────────────
+document.querySelectorAll('.nav-item').forEach(function(el){
+  el.addEventListener('click',function(){var pg=this.dataset.page;if(pg)navTo(pg);});
+});
+document.querySelectorAll('.ftab').forEach(function(el){
+  el.addEventListener('click',function(){curFilter=this.dataset.filter||'all';renderContracts();});
+});
+
+// ── Init ────────────────────────────────────────────────
+
+
+// ── Approval Templates & Per-Contract Flows ──────────────
+var DEF_TL = [
+  {id:1, name:'标准合同审批', desc:'适用于一般金额合同', steps:['合同上传','业务部门审核','法务审核','管理层审批','双方签署','归档']},
+  {id:2, name:'大额合同审批', desc:'合同金额超过 SGD 500,000', steps:['合同上传','业务部门审核','法务审核','CFO审批','CEO审批','双方签署','归档']},
+  {id:3, name:'NDA 快速审批', desc:'保密协议简化流程', steps:['合同上传','法务审核','双方签署']}
+];
+
+var TL;
+var SK_TL = 'cms_tl';
+var editTlId = null;
+var tlNextStepId = 100;
+
+function loadTl(){ try{var v=localStorage.getItem(SK_TL);return v?JSON.parse(v):DEF_TL;}catch(e){return DEF_TL;} }
+function saveTl(){ try{localStorage.setItem(SK_TL,JSON.stringify(TL));}catch(e){} }
+
+// ── Render template list ──
+function renderTimeline(){
+  TL = TL || loadTl();
+  var el = q('tl-list'), em = q('tl-empty');
+  if(!el) return;
+  el.innerHTML = '';
+  if(!TL.length){ el.style.display='none'; if(em)em.style.display='block'; return; }
+  el.style.display = 'grid'; if(em) em.style.display='none';
+
+  TL.forEach(function(tpl){
+    var card = mk('div','card');
+    // Header
+    var hdr = mk('div'); hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
+    var left = mk('div');
+    var nm = mk('div','',tpl.name); nm.style.cssText='font-size:14px;font-weight:600';
+    var desc = mk('div','',tpl.desc||''); desc.style.cssText='font-size:12px;color:var(--text3);margin-top:2px';
+    left.appendChild(nm); left.appendChild(desc);
+    var acts = mk('div'); acts.style.cssText='display:flex;gap:6px';
+    var be = mk('button','btn btn-ghost','✏ 编辑'); be.style.fontSize='12px';
+    be.onclick = (function(id){return function(){openTlForm(id);};})(tpl.id);
+    var bd = mk('button','btn btn-danger','删除'); bd.style.fontSize='12px';
+    bd.onclick = (function(id){return function(){deleteTlTemplate(id);};})(tpl.id);
+    acts.appendChild(be); acts.appendChild(bd);
+    hdr.appendChild(left); hdr.appendChild(acts);
+    card.appendChild(hdr);
+    // Steps
+    var stepsWrap = mk('div'); stepsWrap.style.cssText='display:flex;flex-wrap:wrap;gap:5px;margin-top:4px';
+    tpl.steps.forEach(function(s, i){
+      var chip = mk('div','',s);
+      chip.style.cssText='font-size:11px;padding:3px 9px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2)';
+      stepsWrap.appendChild(chip);
+      if(i < tpl.steps.length-1){
+        var arr = mk('span','','›'); arr.style.cssText='font-size:11px;color:var(--text3);align-self:center';
+        stepsWrap.appendChild(arr);
+      }
+    });
+    card.appendChild(stepsWrap);
+    // Usage count
+    var usedBy = C.filter(function(c){return c.approval && c.approval.templateId===tpl.id;}).length;
+    if(usedBy){
+      var uc = mk('div','',usedBy+' 份合同正在使用'); uc.style.cssText='font-size:11px;color:var(--accent);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)';
+      card.appendChild(uc);
+    }
+    el.appendChild(card);
+  });
+}
+
+function deleteTlTemplate(id){
+  var tpl = TL.find(function(x){return x.id===id;});
+  if(!tpl) return;
+  var usedBy = C.filter(function(c){return c.approval && c.approval.templateId===id;}).length;
+  var msg = '确定删除模板「'+tpl.name+'」？';
+  if(usedBy) msg += '\n注意：有 '+usedBy+' 份合同正在使用此模板，删除后这些合同的审批记录不受影响。';
+  if(!confirm(msg)) return;
+  TL = TL.filter(function(x){return x.id!==id;});
+  saveTl(); renderTimeline();
+}
+
+// ── Template form ──
+function openTlForm(id){
+  editTlId = id||null;
+  setText('tl-form-title', id?'编辑审批模板':'新建审批模板');
+  var tpl = id ? TL.find(function(x){return x.id===id;}) : null;
+  setVal('tl-tname', tpl?tpl.name:'');
+  setVal('tl-tdesc', tpl?tpl.desc:'');
+  var stepsEl = q('tl-steps-list'); stepsEl.innerHTML='';
+  var steps = tpl ? tpl.steps : ['合同上传','法务审核','双方签署'];
+  steps.forEach(function(s){ addTlStepRow(s); });
+  openModal('modal-tl-form');
+}
+
+function addTlStep(){ addTlStepRow(''); }
+
+function addTlStepRow(label){
+  var stepsEl = q('tl-steps-list');
+  var row = mk('div'); row.style.cssText='display:flex;gap:8px;align-items:center';
+  var inp = document.createElement('input'); inp.className='form-input';
+  inp.style.cssText='flex:1;padding:7px 10px;font-size:13px'; inp.value=label||'';
+  inp.placeholder='步骤名称（如：法务审核）';
+  var del = mk('button','btn btn-danger','×'); del.style.cssText='padding:5px 10px;flex-shrink:0';
+  del.onclick = function(){ stepsEl.removeChild(row); };
+  row.appendChild(inp); row.appendChild(del);
+  stepsEl.appendChild(row);
+}
+
+function saveTlTemplate(){
+  var name = getVal('tl-tname').trim(); if(!name){alert('请填写模板名称');return;}
+  var steps = [];
+  q('tl-steps-list').querySelectorAll('input').forEach(function(inp){
+    var v=inp.value.trim(); if(v) steps.push(v);
+  });
+  if(!steps.length){alert('请至少添加一个步骤');return;}
+  var data = {name:name, desc:getVal('tl-tdesc').trim(), steps:steps};
+  if(editTlId){
+    var idx=TL.findIndex(function(x){return x.id===editTlId;});
+    if(idx!==-1){data.id=editTlId; TL[idx]=data;}
+  } else {
+    data.id=Date.now(); TL.push(data);
+  }
+  saveTl(); closeModal('modal-tl-form'); renderTimeline();
+}
+
+// ── Apply template to contract ──
+var curApplyContractId = null;
+
+function openApplyTl(contractId){
+  curApplyContractId = contractId;
+  TL = TL || loadTl();
+  var c = C.find(function(x){return x.id===contractId;});
+  if(!c) return;
+  setText('tla-cname', c.name);
+  // Fill template select
+  var sel = q('tla-template'); sel.innerHTML='';
+  if(!TL.length){
+    var o=document.createElement('option'); o.textContent='暂无模板，请先在审批流程页面创建'; sel.appendChild(o);
+  } else {
+    TL.forEach(function(tpl){
+      var o=document.createElement('option'); o.value=tpl.id; o.textContent=tpl.name+(tpl.desc?' — '+tpl.desc:''); sel.appendChild(o);
+    });
+  }
+  updateTlPreview();
+  sel.onchange = updateTlPreview;
+  openModal('modal-tl-apply');
+}
+
+function updateTlPreview(){
+  var sel = q('tla-template'); var prev = q('tla-preview');
+  if(!sel||!prev||!TL.length) return;
+  var tpl = TL.find(function(x){return String(x.id)===sel.value;});
+  if(!tpl){prev.innerHTML='';return;}
+  prev.innerHTML='';
+  var tl = mk('div','tl-wrap');
+  tpl.steps.forEach(function(s,i){
+    var item = mk('div','tl-item'); if(i===tpl.steps.length-1)item.style.paddingBottom='0';
+    var dot = mk('div','tl-dot '+(i===0?'done':'pending'));
+    var lbl = mk('div','tl-label',(i===0?'✅ ':'')+s);
+    item.appendChild(dot); item.appendChild(lbl);
+    tl.appendChild(item);
+  });
+  prev.appendChild(tl);
+}
+
+function applyTlTemplate(){
+  if(!curApplyContractId||!TL.length) return;
+  var sel = q('tla-template');
+  var tpl = TL.find(function(x){return String(x.id)===sel.value;});
+  if(!tpl){alert('请选择一个模板');return;}
+  var c = C.find(function(x){return x.id===curApplyContractId;});
+  if(!c) return;
+  // Create per-contract approval with step states
+  c.approval = {
+    templateId: tpl.id,
+    templateName: tpl.name,
+    steps: tpl.steps.map(function(s,i){
+      return {label:s, state:i===0?'done':'pending', date:'', note:''};
+    })
+  };
+  if(c.approval.steps.length>0) c.approval.steps[0].date = c.start||today();
+  save(SK.C,C);
+  closeModal('modal-tl-apply');
+  closeModal('modal-contract-detail');
+  // Reopen detail to show updated approval
+  openContractDetail(curApplyContractId);
+}
+
+// ── Render approval in contract detail ──
+function renderContractApproval(c){
+  var section = q('cd-approval-section');
+  var stepsEl = q('cd-approval-steps');
+  if(!section||!stepsEl) return;
+  if(!c.approval||!c.approval.steps||!c.approval.steps.length){
+    section.style.display='none'; return;
+  }
+  section.style.display='block';
+  setText('cd-tl-name','模板：'+c.approval.templateName);
+  // Progress bar
+  var done = c.approval.steps.filter(function(s){return s.state==='done';}).length;
+  var pct = Math.round(done/c.approval.steps.length*100);
+  stepsEl.innerHTML='';
+  var pb = mk('div','progress-bar'); pb.style.cssText='margin-bottom:12px';
+  var pf = mk('div','progress-fill'); pf.style.width=pct+'%';
+  pb.appendChild(pf); stepsEl.appendChild(pb);
+  // Timeline
+  var tl = mk('div','tl-wrap');
+  c.approval.steps.forEach(function(s,i){
+    var item = mk('div','tl-item'); if(i===c.approval.steps.length-1)item.style.paddingBottom='0';
+    var dot = mk('div','tl-dot '+s.state);
+    var lbl = mk('div','tl-label',(s.state==='done'?'✅ ':s.state==='current'?'🔄 ':'')+s.label);
+    item.appendChild(dot); item.appendChild(lbl);
+    if(s.date){var dt=mk('div','tl-date',s.date);item.appendChild(dt);}
+    if(s.note){var nt=mk('div','',s.note);nt.style.cssText='font-size:11px;color:var(--text3)';item.appendChild(nt);}
+    tl.appendChild(item);
+  });
+  stepsEl.appendChild(tl);
+  // Wire edit btn
+  var eb = q('cd-tl-edit-btn');
+  if(eb) eb.onclick = function(){ openStepEdit(c.id); };
+}
+
+// ── Edit step progress ──
+function openStepEdit(cid){
+  var c = C.find(function(x){return x.id===cid;});
+  if(!c||!c.approval) return;
+  setText('tlse-cname', c.name);
+  var stepsEl = q('tlse-steps'); stepsEl.innerHTML='';
+  c.approval.steps.forEach(function(s,i){
+    var row = mk('div'); row.style.cssText='background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;display:flex;align-items:center;gap:10px';
+    var num = mk('div','',String(i+1));
+    num.style.cssText='width:22px;height:22px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0';
+    var lbl = mk('div','',s.label); lbl.style.cssText='flex:1;font-size:13px;font-weight:500';
+    var sel = document.createElement('select'); sel.className='form-input';
+    sel.style.cssText='width:110px;padding:5px 8px;font-size:12px;flex-shrink:0'; sel.dataset.idx=i;
+    [['done','✅ 已完成'],['current','🔄 进行中'],['pending','⬜ 待开始']].forEach(function(opt){
+      var o=document.createElement('option'); o.value=opt[0]; o.textContent=opt[1];
+      if(s.state===opt[0]) o.selected=true;
+      sel.appendChild(o);
+    });
+    var dt = document.createElement('input'); dt.className='form-input';
+    dt.style.cssText='width:90px;padding:5px 8px;font-size:12px;flex-shrink:0'; dt.dataset.idx=i;
+    dt.placeholder='日期'; dt.value=s.date||'';
+    row.appendChild(num); row.appendChild(lbl); row.appendChild(sel); row.appendChild(dt);
+    stepsEl.appendChild(row);
+  });
+  // Store contract id for saving
+  q('modal-tl-step-edit').dataset.cid = cid;
+  openModal('modal-tl-step-edit');
+}
+
+function saveStepProgress(){
+  var cid = q('modal-tl-step-edit').dataset.cid;
+  var c = C.find(function(x){return x.id===cid;});
+  if(!c||!c.approval) return;
+  var sels = q('tlse-steps').querySelectorAll('select');
+  var dts  = q('tlse-steps').querySelectorAll('input');
+  sels.forEach(function(sel){
+    var idx = parseInt(sel.dataset.idx);
+    c.approval.steps[idx].state = sel.value;
+  });
+  dts.forEach(function(dt){
+    var idx = parseInt(dt.dataset.idx);
+    c.approval.steps[idx].date = dt.value.trim();
+  });
+  save(SK.C,C);
+  closeModal('modal-tl-step-edit');
+  renderContractApproval(c);
+}
+
+
+// Suppress server sync during initial load to prevent overwriting server data
+_suppressFbSync = true;
+
+// Load from localStorage first (instant display)
+C=load(SK.C,[]);E=load(SK.E,DEF_E);T=load(SK.T,DEF_T);TL=loadTl();
+M=load(SK.M,{nextGId:10,nextEId:20,nextCId:30,nextFId:10,nextTId:20});
+renderDashboard();renderContracts();renderGroupList();renderTplList();
+
+// Then load from server (authoritative source)
+fbLoadAll().then(function(){
+  // Cache to localStorage for instant next load
+  try{ localStorage.setItem(SK.C, JSON.stringify(C)); }catch(e){}
+  try{ localStorage.setItem(SK.E, JSON.stringify(E)); }catch(e){}
+  try{ localStorage.setItem(SK.T, JSON.stringify(T)); }catch(e){}
+  try{ localStorage.setItem(SK.M, JSON.stringify(M)); }catch(e){}
+  _suppressFbSync = false;
+  renderDashboard();renderContracts();renderGroupList();renderTplList();
+  console.log('Rendered with server data');
+}).catch(function(e){
+  console.warn('Server unavailable, using localStorage only:', e);
+  _suppressFbSync = false;
+});
+
+// Load mammoth async (for docx extraction)
+(function(){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';document.head.appendChild(s);})();
+// Load SheetJS async (for Excel export)
+(function(){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';document.head.appendChild(s);})();
+</script>
+<!-- Google Drive Import Modal -->
+<div id="modal-drive-import" class="overlay">
+  <div class="modal" style="max-width:720px;width:95%;max-height:85vh;overflow-y:auto">
+    <div class="modal-header">
+      <div class="modal-title">📂 从 Google Drive 导入合同</div>
+      <button class="modal-close" onclick="closeModal('modal-drive-import')">×</button>
+    </div>
+    <!-- Steps -->
+    <div id="di-steps" style="display:flex;align-items:center;margin-bottom:20px">
+      <div id="di-step1" style="display:flex;align-items:center;gap:6px">
+        <div id="di-s1num" style="width:24px;height:24px;border-radius:50%;background:#4caf6e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">✓</div>
+        <span style="font-size:11px;font-weight:600;color:#4caf6e">连接文件夹</span>
+      </div>
+      <div style="flex:1;height:1px;background:#e8f0e9;margin:0 10px"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div id="di-s2num" style="width:24px;height:24px;border-radius:50%;background:#1c2a1f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">2</div>
+        <span id="di-s2lbl" style="font-size:11px;font-weight:600;color:#1c2a1f">AI 识别</span>
+      </div>
+      <div style="flex:1;height:1px;background:#e8f0e9;margin:0 10px"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div id="di-s3num" style="width:24px;height:24px;border-radius:50%;background:#f0f4f1;color:#8a9e92;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">3</div>
+        <span id="di-s3lbl" style="font-size:11px;font-weight:600;color:#8a9e92">确认导入</span>
+      </div>
+    </div>
+    <!-- Folder info -->
+    <div style="background:#f8faf8;border:1.5px solid #d8ead9;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span style="font-size:22px">📁</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:#1c2a1f">合同管理</div>
+        <div style="font-size:11px;color:#8a9e92;margin-top:2px">Google Drive · 自动连接</div>
+      </div>
+      <button class="btn btn-primary" onclick="startDriveScan()" id="di-scan-btn" style="font-size:12px;padding:7px 14px">🔄 扫描文件</button>
+    </div>
+    <!-- Progress -->
+    <div id="di-progress" style="display:none;background:#f0f9f3;border:1.5px solid #c8e6c9;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:#2e7d32;margin-bottom:8px">🤖 AI 正在识别合同信息...</div>
+      <div style="background:#c8e6c9;border-radius:10px;height:6px;margin-bottom:6px">
+        <div id="di-bar" style="background:#4caf6e;border-radius:10px;height:6px;width:0%;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#4caf6e">
+        <span id="di-prog-text">准备中...</span>
+        <span id="di-prog-count"></span>
+      </div>
+    </div>
+    <!-- File list -->
+    <div id="di-file-list" style="border:1px solid #e8f0e9;border-radius:8px;overflow:hidden;display:none;max-height:320px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f8faf8">
+            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">文件名 / 识别结果</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">对方当事人</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">到期日期</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">状态</th>
+            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">操作</th>
+          </tr>
+        </thead>
+        <tbody id="di-tbody"></tbody>
+      </table>
+    </div>
+    <!-- Empty state -->
+    <div id="di-empty" style="text-align:center;padding:40px;color:#8a9e92;font-size:13px">
+      点击「扫描文件」读取 Google Drive 文件夹里的合同
+    </div>
+    <!-- Bottom actions -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+      <div id="di-summary" style="font-size:12px;color:#8a9e92"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal('modal-drive-import')">取消</button>
+        <button class="btn btn-primary" id="di-import-btn" style="display:none" onclick="confirmDriveImport()">✅ 全部导入</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="fb-loading" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px">
+  <div style="background:#fff;border-radius:12px;padding:32px 40px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+    <div style="font-size:32px;margin-bottom:10px">🔄</div>
+    <div style="font-size:15px;font-weight:600;color:#1c2a1f">正在同步数据...</div>
+    <div style="font-size:12px;color:#8a9e92;margin-top:5px">连接 Firebase 中</div>
+  </div>
+</div>
+</body>
+</html>
