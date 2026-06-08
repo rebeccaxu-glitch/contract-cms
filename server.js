@@ -168,8 +168,10 @@ app.post('/api/ai/analyze', express.json({ limit: '30mb' }), async (req, res) =>
 });
 
 // ── 启动 ─────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ 合同管理系统运行中: http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`✅ 合同管理系统运行中：http://localhost:${PORT}`);
+  });
+}
 module.exports = app;
