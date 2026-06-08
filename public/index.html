@@ -1018,7 +1018,7 @@ function saveContract(){
 
   // Check for duplicates only when adding new contract (not editing)
   if(!editCid){
-    showDuplicateWarning(name, party,
+    showDuplicateWarning(name, party, getVal('cf-amount').trim(), getVal('cf-id').trim(),
       function(){ // proceed
         C.push(data);
         save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();
@@ -2456,25 +2456,36 @@ function strSimilarity(a, b){
   return common/longer.length;
 }
 
-// Find duplicate contracts for a given name+party
-function findDuplicates(name, party, excludeId){
+// Find duplicate contracts for a given name+party+amount+contractNo
+function findDuplicates(name, party, amount, contractNo, excludeId){
   var results=[];
   C.forEach(function(c){
     if(excludeId && c.id===excludeId) return;
-    var nameSim = strSimilarity(name, c.name);
-    var partySim = party && c.party ? strSimilarity(party, c.party) : 0.5;
-    var score = nameSim*0.7 + partySim*0.3;
-    if(score >= 0.65){
-      results.push({contract:c, score:Math.round(score*100)});
+    var reasons=[];
+    var nameTrim=(name||'').trim().toLowerCase();
+    var cNameTrim=(c.name||'').trim().toLowerCase();
+    if(nameTrim && nameTrim===cNameTrim) reasons.push('名称完全相同');
+    var noTrim=(contractNo||'').trim();
+    if(noTrim && noTrim===c.id) reasons.push('合同编号相同');
+    var amtN=(amount||'').trim().replace(/\s/g,'').toLowerCase();
+    var cAmtN=(c.amount||'').trim().replace(/\s/g,'').toLowerCase();
+    if(amtN && cAmtN && amtN===cAmtN && party && c.party && strSimilarity(party,c.party)>=0.8) reasons.push('公司+金额相同');
+    var nameSim=strSimilarity(name,c.name);
+    var partySim=party && c.party ? strSimilarity(party,c.party) : 0.5;
+    var score=nameSim*0.7+partySim*0.3;
+    if(score>=0.6 && reasons.length===0) reasons.push('内容高度相似');
+    if(reasons.length>0){
+      var fs=reasons.some(function(r){return r==='名称完全相同'||r==='合同编号相同';}) ? 100 : Math.round(score*100);
+      results.push({contract:c, score:fs, reasons:reasons});
     }
   });
   results.sort(function(a,b){return b.score-a.score;});
-  return results.slice(0,3); // top 3
+  return results.slice(0,3);
 }
 
 // Show duplicate warning modal
-function showDuplicateWarning(name, party, onProceed, onMerge){
-  var dups = findDuplicates(name, party, editCid);
+function showDuplicateWarning(name, party, amount, contractNo, onProceed, onMerge){
+  var dups = findDuplicates(name, party, amount, contractNo, editCid);
   if(!dups.length){ onProceed(); return; }
 
   // Build warning modal content
@@ -2496,8 +2507,11 @@ function showDuplicateWarning(name, party, onProceed, onMerge){
     html += '<div style="flex:1">';
     html += '<div style="font-size:13px;font-weight:600;color:#1c2a1f">'+d.contract.name+'</div>';
     html += '<div style="font-size:11px;color:#8a9e92;margin-top:2px">'+d.contract.id+' · '+d.contract.party+'</div>';
+    html += '<div style="margin-top:5px">';
+    d.reasons.forEach(function(r){ html += '<span style="display:inline-block;font-size:10px;font-weight:700;background:#ffe0b2;color:#e65100;padding:1px 7px;border-radius:4px;margin-right:4px">'+r+'</span>'; });
     html += '</div>';
-    html += '<span style="font-size:11px;font-weight:700;color:#f57f17;background:#fff3e0;padding:2px 8px;border-radius:8px">相似度 '+d.score+'%</span>';
+    html += '</div>';
+    html += '<span style="font-size:11px;font-weight:700;color:#f57f17;background:#fff3e0;padding:2px 8px;border-radius:8px">'+d.score+'%</span>';
     html += '</div>';
   });
 
@@ -2536,7 +2550,7 @@ function showDuplicateWarning(name, party, onProceed, onMerge){
 
 // Merge new upload into existing contract as a new version
 function showDupList(name, party){
-  var dups = findDuplicates(name, party, null);
+  var dups = findDuplicates(name, party, '', '', null);
   if(!dups.length){ alert('没有找到重复合同'); return; }
   var msg = '以下合同与「'+name+'」疑似重复：\n\n';
   dups.forEach(function(d){
