@@ -172,3 +172,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ 合同管理系统运行中: http://localhost:${PORT}`);
 });
+module.exports = app;
