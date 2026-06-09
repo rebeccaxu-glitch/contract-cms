@@ -710,9 +710,11 @@ var idb = null;
 function openIDB(){
   return new Promise(function(res, rej){
     if(idb){ res(idb); return; }
-    var req = indexedDB.open(IDB_NAME, 1);
+    var req = indexedDB.open(IDB_NAME, 2); // v2: force recreate store with correct keyPath
     req.onupgradeneeded = function(e){
-      e.target.result.createObjectStore(IDB_STORE, {keyPath:'id'});
+      var db = e.target.result;
+      if(db.objectStoreNames.contains(IDB_STORE)) db.deleteObjectStore(IDB_STORE);
+      db.createObjectStore(IDB_STORE, {keyPath:'id'});
     };
     req.onsuccess = function(e){ idb = e.target.result; res(idb); };
     req.onerror   = function(e){ rej(e.target.error); };
@@ -721,6 +723,7 @@ function openIDB(){
 
 function saveFile(id, fileObj){
   // fileObj: {id, name, size, type, dataUrl}
+  if(!fileObj.id) fileObj.id = id;
   return openIDB().then(function(db){
     return new Promise(function(res, rej){
       var tx = db.transaction(IDB_STORE, 'readwrite');
@@ -1464,9 +1467,9 @@ function callAI(b64,isPDF,fname,file){
   return doFetch([{type:'text',text:'文件名：'+fname+'\n请根据文件名推断合同信息。'}]);
 }
 function doFetch(msgContent){
-  return fetch('https://api.anthropic.com/v1/messages',{
+  return fetch('/api/ai/analyze',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:AI_SYS,messages:[{role:'user',content:msgContent}]})
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system:AI_SYS,messages:[{role:'user',content:msgContent}]})
   }).then(function(r){return r.json();}).then(function(d){
     var t=(d.content&&d.content[0]&&d.content[0].text)||'{}';
     try{return JSON.parse(t.replace(/```json|```/g,'').trim());}catch(e){return {};}
