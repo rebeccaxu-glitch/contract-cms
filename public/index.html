@@ -1417,14 +1417,14 @@ function archiveContract(){
     ver.fileSize=uploadedFileData.size;
     ver.fileType=uploadedFileData.type;
     ver.hasFile=true;
-    // Upload to Firebase Storage (also caches locally in IndexedDB)
-    uploadToStorage(vid, {id:vid, name:uploadedFileData.name, size:uploadedFileData.size,
-      type:uploadedFileData.type, dataUrl:uploadedFileData.dataUrl}).then(function(url){
-      if(url){
-        var ci=C.findIndex(function(x){return x.id===cid;});
-        if(ci!==-1){var vi=C[ci].versions.findIndex(function(v){return v.id===vid;});
-          if(vi!==-1){C[ci].versions[vi].storageUrl=url;save(SK.C,C);}}
-      }
+    // Save to IndexedDB; fall back to storing dataUrl directly on version if IDB fails
+    saveFile(vid, {id:vid, name:uploadedFileData.name, size:uploadedFileData.size,
+      type:uploadedFileData.type, dataUrl:uploadedFileData.dataUrl}).catch(function(e){
+      console.warn('IDB save failed, falling back to inline fileData:', e);
+      ver.fileData=uploadedFileData.dataUrl;
+      var ci=C.findIndex(function(x){return x.id===cid;});
+      if(ci!==-1){var vi=C[ci].versions.findIndex(function(v){return v.id===vid;});
+        if(vi!==-1){C[ci].versions[vi].fileData=uploadedFileData.dataUrl;save(SK.C,C);}}
     });
   }
   var newC={id:cid,name:name,party:getVal('f-party')||'--',type:getVal('f-type'),
