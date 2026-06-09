@@ -148,40 +148,10 @@ textarea.form-input{resize:vertical;}
 .cal-day.has-event::after{content:'';position:absolute;bottom:2px;width:4px;height:4px;border-radius:50%;background:var(--red);}
 .section-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;padding-bottom:8px;border-top:none;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
 </style>
-<!-- Firebase SDK 已移除 — 数据通过 Node.js 后端 /api/* 读写 -->
-<script>
-// ── IndexedDB 文件存储（替代 localStorage，支持大文件）──
-var _idbReady = null;
-function getIDB(){
-  if(_idbReady) return _idbReady;
-  _idbReady = new Promise(function(resolve,reject){
-    var req = indexedDB.open('cms_files', 1);
-    req.onupgradeneeded = function(e){ e.target.result.createObjectStore('files'); };
-    req.onsuccess = function(e){ resolve(e.target.result); };
-    req.onerror = function(e){ reject(e); };
-  });
-  return _idbReady;
-}
-function idbSet(key, val){
-  return getIDB().then(function(db){
-    return new Promise(function(resolve,reject){
-      var tx=db.transaction('files','readwrite');
-      tx.objectStore('files').put(val, key);
-      tx.oncomplete=function(){resolve();};
-      tx.onerror=function(e){reject(e);};
-    });
-  });
-}
-function idbGet(key){
-  return getIDB().then(function(db){
-    return new Promise(function(resolve,reject){
-      var req=db.transaction('files','readonly').objectStore('files').get(key);
-      req.onsuccess=function(e){resolve(e.target.result||null);};
-      req.onerror=function(e){reject(e);};
-    });
-  });
-}
-</script>
+<!-- Firebase SDKs loaded directly for reliability -->
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
 </head>
 <body>
 <aside class="sidebar">
@@ -250,8 +220,7 @@ function idbGet(key){
           </div>
           <button class="btn btn-primary" style="margin-left:auto;font-size:12px" onclick="openContractForm(null)">＋ 手动添加</button>
         </div>
-        <table><thead><tr><th>合同名称 / 备注</th><th>对方当事人</th><th>类型</th><th>状态</th><th>签署日期</th><th>到期日期</th><th>操作</th></tr></thead>
-        <tbody id="contracts-tbody"></tbody></table>
+        <div id="contracts-list"></div>
         <div id="contracts-empty" style="display:none;text-align:center;padding:48px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">📄</div>暂无合同记录</div>
       </div>
     </div>
@@ -607,73 +576,200 @@ function idbGet(key){
 </div>
 
 <script>// ═══════════════════════════════════════════════════════
-//  API LAYER — 所有数据通过 Node.js 后端读写
-//  GET  /api/data          → 加载所有数据
-//  POST /api/data          → 保存所有数据
-//  POST /api/files/upload  → 上传文件
-//  GET  /api/files/:id     → 下载 / 预览文件
+//  FIREBASE LAYER
+//  合同数据 → Firestore
+//  文件 → 保留 IndexedDB（Storage 需付费，暂不迁移）
 // ═══════════════════════════════════════════════════════
 
-// ── Loading overlay ────────────────────────────────────
+// Firebase config
+var FB_CONFIG = {
+  apiKey: "AIzaSyANyxVWbLqNI-ohZaeuVqmSuvMruc-Qid4",
+  authDomain: "contract-managementv4.firebaseapp.com",
+  projectId: "contract-managementv4",
+  storageBucket: "contract-managementv4.firebasestorage.app",
+  messagingSenderId: "976367702850",
+  appId: "1:976367702850:web:7ae4a73b69270f3085aedb"
+};
+
+var fbApp = null;
+var fbDb  = null;
+var fbStorage = null;
+var fbReady = false;
+
+// Firebase SDKs loaded in <head> — just init directly
+function loadFirebase(){
+  return new Promise(function(res, rej){
+    if(fbReady){ res(); return; }
+    try {
+      try {
+        fbApp = firebase.initializeApp(FB_CONFIG);
+      } catch(e) {
+        fbApp = firebase.app(); // already initialized
+      }
+      fbDb = firebase.firestore();
+      fbStorage = firebase.storage();
+      fbReady = true;
+      console.log('Firebase ready');
+      res();
+    } catch(e) {
+      console.warn('Firebase init failed:', e);
+      rej(e);
+    }
+  });
+}
+
+// ── Firebase CRUD helpers ─────────────────────────────
+
+// Strip fileData before saving to Firestore (files stay in IndexedDB)
+function stripFileData(obj){
+  if(Array.isArray(obj)) return obj.map(stripFileData);
+  if(obj && typeof obj === 'object'){
+    var out = {};
+    Object.keys(obj).forEach(function(k){
+      if(k === 'fileData') return; // skip base64 data
+      out[k] = stripFileData(obj[k]);
+    });
+    return out;
+  }
+  return obj;
+}
+
+function fbSet(collection, docId, data){
+  if(!fbDb) return Promise.resolve();
+  return fbDb.collection(collection).doc(docId).set(stripFileData(data));
+}
+
+function fbGet(collection, docId){
+  if(!fbDb) return Promise.resolve(null);
+  return fbDb.collection(collection).doc(docId).get().then(function(doc){
+    return doc.exists ? doc.data() : null;
+  });
+}
+
+function fbGetAll(collection){
+  if(!fbDb) return Promise.resolve([]);
+  return fbDb.collection(collection).get().then(function(snap){
+    return snap.docs.map(function(d){ return d.data(); });
+  });
+}
+
+// ── Save all data to Firestore ───────────────────────
+function fbSaveAll(){
+  if(!fbDb) return;
+  // Save contracts (strip fileData from versions)
+  fbDb.collection('cms').doc('contracts').set({ data: stripFileData(C) });
+  fbDb.collection('cms').doc('entities').set({ data: stripFileData(E) });
+  fbDb.collection('cms').doc('templates').set({ data: stripFileData(T) });
+  fbDb.collection('cms').doc('meta').set({ data: M });
+  fbDb.collection('cms').doc('timeline').set({ data: TL||[] });
+}
+
+// ── Load all data from Firestore ─────────────────────
+function fbLoadAll(){
+  return loadFirebase().then(function(){
+    showLoadingOverlay(true);
+    return Promise.all([
+      fbDb.collection('cms').doc('contracts').get(),
+      fbDb.collection('cms').doc('entities').get(),
+      fbDb.collection('cms').doc('templates').get(),
+      fbDb.collection('cms').doc('meta').get(),
+      fbDb.collection('cms').doc('timeline').get()
+    ]);
+  }).then(function(docs){
+    if(docs[0].exists && docs[0].data().data) C  = docs[0].data().data;
+    if(docs[1].exists && docs[1].data().data) E  = docs[1].data().data;
+    if(docs[2].exists && docs[2].data().data) T  = docs[2].data().data;
+    if(docs[3].exists && docs[3].data().data) M  = docs[3].data().data;
+    if(docs[4].exists && docs[4].data().data) TL = docs[4].data().data;
+    showLoadingOverlay(false);
+    console.log('Firebase data loaded: '+C.length+' contracts');
+  }).catch(function(err){
+    console.warn('Firebase load failed, using localStorage:', err);
+    showLoadingOverlay(false);
+  });
+}
+
+// ── Loading overlay ───────────────────────────────────
 function showLoadingOverlay(show){
   var ov = document.getElementById('fb-loading');
   if(ov) ov.style.display = show ? 'flex' : 'none';
 }
 
-// ── 从服务器加载所有数据 ────────────────────────────────
-function fbLoadAll(){
-  showLoadingOverlay(true);
-  return fetch('/api/data')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if(d.contracts && d.contracts.length) C  = d.contracts;
-      if(d.entities  && d.entities.length)  E  = d.entities;
-      if(d.templates && d.templates.length) T  = d.templates;
-      if(d.meta      && Object.keys(d.meta).length) M = d.meta;
-      if(d.timeline  && d.timeline.length)  TL = d.timeline;
-      showLoadingOverlay(false);
-      console.log('API data loaded: ' + C.length + ' contracts');
-    })
-    .catch(function(err){
-      console.warn('API load failed, using localStorage:', err);
-      showLoadingOverlay(false);
-    });
-}
+// ── Override save() to also write to Firestore ───────
+var _origSave = null; // will be set after save() is defined
 
-// ── 保存所有数据到服务器（防抖 800ms）─────────────────────
-function fbSaveAll(){
-  clearTimeout(window._apiSaveTimer);
-  window._apiSaveTimer = setTimeout(function(){
-    fetch('/api/data', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ contracts: C, entities: E, templates: T, meta: M, timeline: TL||[] })
-    }).catch(function(e){ console.warn('API save failed:', e); });
-  }, 800);
-}
 
-// ── 上传文件到服务器 → Firebase Storage ───────────────────
-// 返回 Promise<{ url, name } | null>
-function uploadToStorage(id, fileObj){
-  if(!fileObj || !(fileObj.dataUrl || fileObj.b64)) return Promise.resolve(null);
-  var dataUrl = fileObj.dataUrl || fileObj.b64;
-  return idbSet('file_' + id, dataUrl).then(function(){
-    return { url: 'local://' + id, name: fileObj.name || id };
-  }).catch(function(e){
-    console.warn('IndexedDB 存储失败:', e);
-    return null;
+// ── IndexedDB for file storage ────────────────────────────
+// Files are stored separately in IDB (no size limit issues)
+// Contract metadata (no fileData) stays in localStorage
+
+var IDB_NAME = 'cms_files';
+var IDB_STORE = 'files';
+var idb = null;
+
+function openIDB(){
+  return new Promise(function(res, rej){
+    if(idb){ res(idb); return; }
+    var req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = function(e){
+      e.target.result.createObjectStore(IDB_STORE, {keyPath:'id'});
+    };
+    req.onsuccess = function(e){ idb = e.target.result; res(idb); };
+    req.onerror   = function(e){ rej(e.target.error); };
   });
 }
 
-// ── 打开 / 下载文件（通过服务器代理）─────────────────────
-function openFromStorage(fileId, fileType, fileName){
-  window.open('/api/files/' + fileId, '_blank');
+function saveFile(id, fileObj){
+  // fileObj: {id, name, size, type, dataUrl}
+  return openIDB().then(function(db){
+    return new Promise(function(res, rej){
+      var tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(fileObj);
+      tx.oncomplete = res;
+      tx.onerror = rej;
+    });
+  });
 }
 
-// ── 兼容旧代码的 saveFile / loadFile（空操作）────────────
-function saveFile(id, fileObj){ return Promise.resolve(); }
-function loadFile(id){ return Promise.resolve(null); }
-function deleteFile(id){ return Promise.resolve(); }
+function loadFile(id){
+  return openIDB().then(function(db){
+    return new Promise(function(res, rej){
+      var tx = db.transaction(IDB_STORE, 'readonly');
+      var req = tx.objectStore(IDB_STORE).get(id);
+      req.onsuccess = function(){ res(req.result||null); };
+      req.onerror = rej;
+    });
+  });
+}
+
+function deleteFile(id){
+  return openIDB().then(function(db){
+    return new Promise(function(res, rej){
+      var tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(id);
+      tx.oncomplete = res;
+      tx.onerror = rej;
+    });
+  });
+}
+
+// ── Firebase Storage helpers ──────────────────────────────
+// Upload file to Firebase Storage; also cache in IndexedDB.
+// Returns a Promise that resolves with the public download URL (or null on failure).
+function uploadToStorage(id, fileObj){
+  saveFile(id, fileObj); // local IndexedDB cache
+  if(!fbStorage) return Promise.resolve(null);
+  var dataUrl = fileObj.dataUrl || fileObj.b64;
+  var ref = fbStorage.ref('files/' + id);
+  return ref.putString(dataUrl, 'data_url', {contentType: fileObj.type})
+    .then(function(snap){ return snap.ref.getDownloadURL(); })
+    .catch(function(e){ console.warn('Storage upload failed:', e); return null; });
+}
+
+// Open/download a file using its Firebase Storage URL (no CORS issues with window.open)
+function openFromStorage(storageUrl, fileType, fileName){
+  window.open(storageUrl, '_blank');
+}
 
 
 
@@ -708,6 +804,7 @@ var DEF_T = [
 // ── State ──────────────────────────────────────────────
 var C, E, T, M;
 var curFilter   = 'all';
+var collapsedGroups = {}; // tracks collapsed state per company group key
 var editCid     = null;
 var curGrpId    = null;
 var curCoId     = null;
@@ -736,13 +833,16 @@ var TI = {'服务协议':'🤝','采购合同':'📦','保密协议（NDA）':'�
 
 // ── Storage helpers ─────────────────────────────────────
 function load(k,d){ try{var v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;} }
-var _suppressFbSync = false; // true during initial load to prevent overwriting server data
+var _suppressFbSync = false; // true during initial load to prevent overwriting Firebase data
 
 function save(k,v){
   try{ localStorage.setItem(k,JSON.stringify(v)); }
   catch(e){ console.warn('localStorage save failed:',e); }
-  // Sync to server unless suppressed during initial load
-  if(!_suppressFbSync) fbSaveAll();
+  // Only sync to Firebase if not suppressed and Firebase is ready
+  if(fbReady && !_suppressFbSync) {
+    clearTimeout(window._fbSaveTimer);
+    window._fbSaveTimer = setTimeout(fbSaveAll, 800);
+  }
 }
 function saveAll(){ save(SK.C,C);save(SK.E,E);save(SK.T,T);save(SK.M,M); }
 
@@ -897,14 +997,14 @@ function renderContracts(){
 
   var dupIds=markDuplicatesInList();
   var filtered=curFilter==='all'?C:C.filter(function(c){return c.status===curFilter;});
-  var tbody=q('contracts-tbody');
+  var listEl=q('contracts-list');
   var empty=q('contracts-empty');
-  if(!filtered.length){tbody.innerHTML='';empty.style.display='block';return;}
+  if(!filtered.length){listEl.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';
-  tbody.innerHTML='';
+  listEl.innerHTML='';
 
   // Group by company
-  var groups={}; // key: company value or '__none__'
+  var groups={};
   var groupOrder=[];
   filtered.forEach(function(c){
     var key=c.company||'__none__';
@@ -912,100 +1012,153 @@ function renderContracts(){
     groups[key].push(c);
   });
 
-  groupOrder.forEach(function(key){
+  // colour palette for group icons (cycles)
+  var palette=[
+    {bg:'#e1f5ee',fg:'#0f6e56'},
+    {bg:'#e6f1fb',fg:'#185fa5'},
+    {bg:'#faeeda',fg:'#854f0b'},
+    {bg:'#f3e8fb',fg:'#6b21a8'},
+    {bg:'#fde8e8',fg:'#991b1b'},
+    {bg:'#e8f4fd',fg:'#0369a1'}
+  ];
+
+  groupOrder.forEach(function(key, gi){
     var list=groups[key];
-
-    // Group header row
-    var trGrp=document.createElement('tr');
-    var tdGrp=document.createElement('td');
-    tdGrp.colSpan=8;
-    tdGrp.style.cssText='padding:10px 18px 6px;background:var(--surface2);border-bottom:1px solid var(--border)';
     var grpLabel=key==='__none__'?'未分配公司':getCompanyLabel(key);
-    var grpCount=list.length;
-    var grpHdr=mk('div','');
-    grpHdr.style.cssText='display:flex;align-items:center;gap:8px';
-    var grpIcon=mk('span','',key==='__none__'?'📋':'🏢');
-    grpIcon.style.fontSize='13px';
-    var grpName=mk('span','',grpLabel||key);
-    grpName.style.cssText='font-size:12px;font-weight:700;color:var(--text2)';
-    var grpBadge=mk('span','',grpCount+' 份');
-    grpBadge.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;background:var(--border);color:var(--text3)';
-    grpHdr.appendChild(grpIcon);grpHdr.appendChild(grpName);grpHdr.appendChild(grpBadge);
-    tdGrp.appendChild(grpHdr);trGrp.appendChild(tdGrp);
-    tbody.appendChild(trGrp);
+    var firstChar=(grpLabel||'?')[0];
+    var color=palette[gi%palette.length];
+    var isCollapsed=collapsedGroups[key]===true;
 
-    // Contract rows in this group
+    // ── Group card wrapper ──
+    var card=document.createElement('div');
+    card.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;';
+
+    // ── Group header ──
+    var hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none;';
+    hdr.onmouseover=function(){this.style.background='var(--surface2)';};
+    hdr.onmouseout=function(){this.style.background='';};
+
+    var icon=document.createElement('div');
+    icon.textContent=firstChar;
+    icon.style.cssText='width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;background:'+color.bg+';color:'+color.fg+';';
+
+    var nameEl=document.createElement('span');
+    nameEl.textContent=grpLabel||key;
+    nameEl.style.cssText='font-size:13px;font-weight:600;color:var(--text);flex:1;';
+
+    var badge=document.createElement('span');
+    badge.textContent=list.length;
+    badge.style.cssText='min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text3);display:inline-flex;align-items:center;justify-content:center;';
+
+    var chevron=document.createElement('span');
+    chevron.textContent='▾';
+    chevron.style.cssText='color:var(--text3);font-size:14px;transition:transform .2s;transform:'+(isCollapsed?'rotate(-90deg)':'rotate(0deg)')+';';
+
+    hdr.appendChild(icon);hdr.appendChild(nameEl);hdr.appendChild(badge);hdr.appendChild(chevron);
+
+    // ── Group body ──
+    var body=document.createElement('div');
+    body.style.cssText='border-top:1px solid var(--border);'+(isCollapsed?'display:none;':'');
+
+    // Column header
+    var colHdr=document.createElement('div');
+    colHdr.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:6px 14px;background:var(--surface2);';
+    var cols=['合同名称','对方当事人','类型','状态','签署日期','到期日期','操作'];
+    cols.forEach(function(label,i){
+      var ch=document.createElement('div');
+      ch.textContent=label;
+      ch.style.cssText='font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.3px;'+(i===6?'text-align:right':'');
+      colHdr.appendChild(ch);
+    });
+    body.appendChild(colHdr);
+
+    // Contract rows
     list.forEach(function(c){
-      var tr=mk('tr');
+      var row=document.createElement('div');
+      row.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:9px 14px;border-top:1px solid var(--border);align-items:center;font-size:13px;cursor:pointer;';
+      row.onmouseover=function(){this.style.background='var(--surface2)';};
+      row.onmouseout=function(){this.style.background='';};
+      row.onclick=function(){openContractDetail(c.id);};
 
-      // Name + contract ID + notes
-      var tdN=mk('td');
-      var nm=mk('div','cn',c.name);
-      nm.onclick=(function(id){return function(){openContractDetail(id);};})(c.id);
-      var cid=mk('div','cid',c.id);
-      tdN.appendChild(nm);tdN.appendChild(cid);
-      // Duplicate badge
+      // Col 1: Name + ID + dup badge
+      var colName=document.createElement('div');
+      var nm=mk('div','cn',c.name);nm.style.cssText='font-weight:600;color:var(--text);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      var cid=mk('div','cid',c.id);cid.style.cssText='font-size:11px;color:var(--text3);margin-top:1px;';
+      colName.appendChild(nm);colName.appendChild(cid);
       if(dupIds.indexOf(c.id)!==-1){
         var dupBadge=mk('span','','⚠️ 疑似重复');
         dupBadge.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;font-weight:600;background:#fff3e0;color:#f57f17;border:1px solid #ffe082;margin-top:3px;display:inline-block;cursor:pointer';
-        dupBadge.title='点击查看重复合同';
-        dupBadge.onclick=(function(n,p){return function(){showDupList(n,p);};})(c.name,c.party);
-        tdN.appendChild(dupBadge);
+        dupBadge.onclick=function(e){e.stopPropagation();showDupList(c.name,c.party);};
+        colName.appendChild(dupBadge);
       }
-      // Notes — show if exists
       if(c.notes&&c.notes.trim()){
         var nt=mk('div','',c.notes.trim());
-        nt.style.cssText='font-size:11px;color:var(--text3);margin-top:3px;line-height:1.4;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-        nt.title=c.notes.trim(); // full text on hover
-        tdN.appendChild(nt);
+        nt.style.cssText='font-size:11px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px;';
+        nt.title=c.notes.trim();
+        colName.appendChild(nt);
       }
 
-      // Party
-      var tdP=mk('td','',c.party);
+      // Col 2: Party
+      var colParty=document.createElement('div');
+      colParty.textContent=c.party||'--';
+      colParty.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
-      // Type
-      var tdT=mk('td');tdT.appendChild(mk('span','ct',c.type));
+      // Col 3: Type
+      var colType=document.createElement('div');
+      var ct=mk('span','ct',c.type||'--');
+      colType.appendChild(ct);
 
-      // Company column — show sub-label only (group already shown in header)
-      var tdCo=mk('td');
-      // skip rendering company again since it's in the group header
+      // Col 4: Status
+      var colStatus=document.createElement('div');
+      colStatus.appendChild(mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status));
 
-      // Status
-      var tdS=mk('td');
-      var bs=mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status);
-      tdS.appendChild(bs);
+      // Col 5: Start date
+      var colStart=document.createElement('div');
+      colStart.textContent=c.start||'--';
+      colStart.style.cssText='color:var(--text2);font-size:12px;';
 
-      // Dates
-      var tdDs=mk('td','cd',c.start||'--');
-      var tdDe=mk('td','cd',c.end||'--');
-      if(c.status==='expiring')tdDe.style.color='var(--orange)';
-      if(c.status==='expired')tdDe.style.color='var(--text3)';
+      // Col 6: End date
+      var colEnd=document.createElement('div');
+      colEnd.textContent=c.end||'--';
+      colEnd.style.cssText='color:var(--text2);font-size:12px;'+(c.status==='expiring'?'color:var(--orange);font-weight:600;':'')+(c.status==='expired'?'color:var(--text3);':'');
 
-      // Actions
-      var tdA=mk('td');
-      var btns=mk('div','act-btns');
+      // Col 7: Actions
+      var colAct=document.createElement('div');
+      colAct.style.cssText='display:flex;gap:4px;justify-content:flex-end;';
       var latestFile=null;
       if(c.versions&&c.versions.length){
         var finals=c.versions.filter(function(v){return v.type==='final'&&(v.fileData||v.hasFile);});
-        if(finals.length) latestFile=finals[finals.length-1];
+        if(finals.length)latestFile=finals[finals.length-1];
         else{var any=c.versions.filter(function(v){return v.fileData||v.hasFile;});if(any.length)latestFile=any[any.length-1];}
       }
-      if(latestFile){
-        var bDl=mk('button','act-btn','⬇');bDl.title='下载 '+(latestFile.fileName||'');
-        bDl.onclick=(function(v){return function(e){e.stopPropagation();downloadContractFile(v);};})(latestFile);
-        var bPv=mk('button','act-btn','👁');bPv.title='预览';
-        bPv.onclick=(function(v){return function(e){e.stopPropagation();previewContractFile(v);};})(latestFile);
-        btns.appendChild(bDl);btns.appendChild(bPv);
+      function iconBtn(title,label,cb){
+        var b=document.createElement('button');
+        b.className='act-btn';b.title=title;b.textContent=label;
+        b.onclick=function(e){e.stopPropagation();cb();};
+        return b;
       }
-      var bE=mk('button','act-btn','编辑');
-      bE.onclick=(function(id){return function(){openContractForm(id);};})(c.id);
-      var bDel=mk('button','act-btn del','删除');
-      bDel.onclick=(function(id){return function(){deleteContract(id);};})(c.id);
-      btns.appendChild(bE);btns.appendChild(bDel);tdA.appendChild(btns);
+      if(latestFile){
+        colAct.appendChild(iconBtn('下载 '+(latestFile.fileName||''),'⬇',function(){downloadContractFile(latestFile);}));
+        colAct.appendChild(iconBtn('预览','👁',function(){previewContractFile(latestFile);}));
+      }
+      colAct.appendChild(iconBtn('编辑','编辑',function(){openContractForm(c.id);}));
+      colAct.appendChild(iconBtn('删除','删除',function(){deleteContract(c.id);}));
 
-      [tdN,tdP,tdT,tdS,tdDs,tdDe,tdA].forEach(function(td){tr.appendChild(td);});
-      tbody.appendChild(tr);
+      [colName,colParty,colType,colStatus,colStart,colEnd,colAct].forEach(function(col){row.appendChild(col);});
+      body.appendChild(row);
     });
+
+    // Toggle behaviour
+    hdr.onclick=function(){
+      var nowCollapsed=body.style.display==='none';
+      body.style.display=nowCollapsed?'':'none';
+      chevron.style.transform=nowCollapsed?'rotate(0deg)':'rotate(-90deg)';
+      collapsedGroups[key]=!nowCollapsed;
+    };
+
+    card.appendChild(hdr);card.appendChild(body);
+    listEl.appendChild(card);
   });
 }
 
@@ -1043,7 +1196,7 @@ function saveContract(){
 
   // Check for duplicates only when adding new contract (not editing)
   if(!editCid){
-    showDuplicateWarning(name, party, getVal('cf-amount').trim(), getVal('cf-id').trim(),
+    showDuplicateWarning(name, party,
       function(){ // proceed
         C.push(data);
         save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();
@@ -1256,34 +1409,29 @@ function archiveContract(){
   var vid='v'+Date.now();
   var ver={id:vid,type:upIsFinal?'final':'draft',ver:upIsFinal?'Final':'v1',
     date:getVal('f-start')||td,note:upIsFinal?'最终签署版':'初始上传版本'};
-  var newC={id:cid,name:name,party:getVal('f-party')||'--',type:getVal('f-type'),
-    status:getVal('f-status'),amount:getVal('f-amount'),company:getVal('f-company'),
-    start:getVal('f-start'),end:getVal('f-end'),notes:getVal('f-notes'),
-    versions:[ver]};
   if(uploadedFileData){
     ver.fileName=uploadedFileData.name;
     ver.fileSize=uploadedFileData.size;
     ver.fileType=uploadedFileData.type;
     ver.hasFile=true;
-    // Upload file to server → Firebase Storage
+    // Upload to Firebase Storage (also caches locally in IndexedDB)
     uploadToStorage(vid, {id:vid, name:uploadedFileData.name, size:uploadedFileData.size,
-      type:uploadedFileData.type, dataUrl:uploadedFileData.dataUrl}).then(function(r){
-      if(r&&r.url){
+      type:uploadedFileData.type, dataUrl:uploadedFileData.dataUrl}).then(function(url){
+      if(url){
         var ci=C.findIndex(function(x){return x.id===cid;});
         if(ci!==-1){var vi=C[ci].versions.findIndex(function(v){return v.id===vid;});
-          if(vi!==-1){C[ci].versions[vi].storageUrl=r.url;save(SK.C,C);}}
+          if(vi!==-1){C[ci].versions[vi].storageUrl=url;save(SK.C,C);}}
       }
     });
   }
-  showDuplicateWarning(name, getVal('f-party'), getVal('f-amount').trim(), getVal('f-id').trim(),
-    function(){
-      C.push(newC);save(SK.C,C);
-      showStep(3,false);showStep(4,true);
-      setText('up-success-msg','"'+name+'" 已归档 · '+(upIsFinal?'标记为最终签署版':'归档为历史版本'));
-      renderDashboard();
-    },
-    function(existing){ mergeIntoExisting(existing); }
-  );
+  var newC={id:cid,name:name,party:getVal('f-party')||'--',type:getVal('f-type'),
+    status:getVal('f-status'),amount:getVal('f-amount'),company:getVal('f-company'),
+    start:getVal('f-start'),end:getVal('f-end'),notes:getVal('f-notes'),
+    versions:[ver]};
+  C.push(newC);save(SK.C,C);
+  showStep(3,false);showStep(4,true);
+  setText('up-success-msg','"'+name+'" 已归档 · '+(upIsFinal?'标记为最终签署版':'归档为历史版本'));
+  renderDashboard();
 }
 function resetUpload(){
   upIsFinal=false;
@@ -1316,8 +1464,7 @@ function callAI(b64,isPDF,fname,file){
   return doFetch([{type:'text',text:'文件名：'+fname+'\n请根据文件名推断合同信息。'}]);
 }
 function doFetch(msgContent){
-  // AI 请求通过 Node.js 后端代理，API Key 不暴露在前端
-  return fetch('/api/ai/analyze',{
+  return fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:AI_SYS,messages:[{role:'user',content:msgContent}]})
   }).then(function(r){return r.json();}).then(function(d){
@@ -1756,20 +1903,21 @@ function saveTplFile(){
   var f=T.find(function(x){return x.id===editTplId;});if(!f)return;
   var data={name:name,type:getVal('tpff-type'),lang:getVal('tpff-lang'),ver:getVal('tpff-ver').trim(),note:getVal('tpff-note').trim(),added:today()};
   // Store file data if uploaded
+  var _tid2 = null;
   if(tplFileData){
-    var tid2='tpl_'+Date.now();
+    _tid2='tpl_'+Date.now();
     data.fileName=tplFileData.name;
     data.fileSize=tplFileData.size;
     data.fileType=tplFileData.type;
-    data.fileId=tid2;data.hasFile=true;
+    data.fileId=_tid2;data.hasFile=true;
     (function(capturedTid){
       uploadToStorage(capturedTid,{id:capturedTid,name:tplFileData.name,size:tplFileData.size,
-        type:tplFileData.type,dataUrl:tplFileData.b64}).then(function(r){
-        if(r&&r.url){var tf=T.find(function(x){return x.id===editTplId;});
+        type:tplFileData.type,dataUrl:tplFileData.b64}).then(function(url){
+        if(url){var tf=T.find(function(x){return x.id===editTplId;});
           if(tf){var targetFile=editTplFid?tf.files.find(function(x){return x.id===editTplFid;}):tf.files[tf.files.length-1];
-            if(targetFile){targetFile.storageUrl=r.url;save(SK.T,T);}}}
+            if(targetFile){targetFile.storageUrl=url;save(SK.T,T);}}}
       });
-    })(tid2);
+    })(_tid2);
   }
   if(editTplFid){
     var t=f.files.find(function(x){return x.id===editTplFid;});
@@ -1788,9 +1936,12 @@ function downloadTplFile(fid,tid){
   var f=T.find(function(x){return x.id===fid;});
   var t=f&&f.files.find(function(x){return x.id===tid;});
   if(!t||(!t.fileData&&!t.hasFile)){alert('此模板没有上传文件');return;}
-  if(t.storageUrl){ window.open(t.storageUrl+'?download=1','_blank'); return; }
+  if(t.storageUrl){ openFromStorage(t.storageUrl, t.fileType, t.fileName||t.name); return; }
   if(t.fileData){ _triggerDownload(t.fileData, t.fileName||t.name); return; }
-  alert('文件未找到，可能需要重新上传');
+  loadFile(t.fileId).then(function(f2){
+    if(!f2){alert('文件未找到');return;}
+    _triggerDownload(f2.dataUrl, f2.name||t.name);
+  });
 }
 function deleteTplFile(fid,tid){
   var f=T.find(function(x){return x.id===fid;});
@@ -1819,38 +1970,53 @@ function _triggerDownload(dataUrl, fileName){
 
 function downloadContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  idbGet('file_'+ver.id).then(function(local){
-    if(local){ _triggerDownload(local, ver.fileName||'contract'); return; }
-    if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){ window.open(ver.storageUrl+'?download=1','_blank'); return; }
-    if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
-    if(!ver.hasFile){alert('此版本没有上传文件');return;}
-    alert('文件未找到，可能需要重新上传');
+  if(ver.storageUrl){ openFromStorage(ver.storageUrl, ver.fileType, ver.fileName); return; }
+  if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
+  if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
+  loadFile(ver.id).then(function(f){
+    if(!f){alert('文件未找到，可能已被清除');return;}
+    _triggerDownload(f.dataUrl, f.name||'contract');
   });
 }
 
 function previewContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  idbGet('file_'+ver.id).then(function(local){
-    if(local){
-      try{
-        var arr=local.split(','),mt=arr[0].match(/:(.*?);/)[1];
-        var b=atob(arr[1]),bb=new Uint8Array(b.length);
-        for(var i=0;i<b.length;i++) bb[i]=b.charCodeAt(i);
-        var bl=new Blob([bb],{type:mt}),u=URL.createObjectURL(bl);
-        window.open(u,'_blank');
-        setTimeout(function(){URL.revokeObjectURL(u);},10000);
-      }catch(e){ _triggerDownload(local, ver.fileName||'contract'); }
-      return;
+  if(ver.storageUrl){ openFromStorage(ver.storageUrl, ver.fileType, ver.fileName); return; }
+  if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
+  var doPreview=function(dataUrl,fileType,fileName){
+    // Convert data URL to Blob URL — more reliable than writing iframe
+    try {
+      var arr=dataUrl.split(',');
+      var mime=arr[0].match(/:(.*?);/)[1];
+      var bstr=atob(arr[1]);
+      var n=bstr.length;
+      var u8=new Uint8Array(n);
+      for(var i=0;i<n;i++) u8[i]=bstr.charCodeAt(i);
+      var blob=new Blob([u8],{type:mime});
+      var blobUrl=URL.createObjectURL(blob);
+      if(fileType&&fileType.includes('pdf')){
+        // Open PDF in new tab using blob URL
+        window.open(blobUrl,'_blank');
+      } else {
+        // Word: download directly
+        var a=document.createElement('a');
+        a.href=blobUrl;a.download=fileName||'contract';
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setTimeout(function(){URL.revokeObjectURL(blobUrl);},1000);
+      }
+    } catch(e){
+      // Fallback: use data URL directly
+      var a=document.createElement('a');
+      a.href=dataUrl;a.download=fileName||'contract';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
     }
-    if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){
-      window.open(ver.storageUrl,'_blank'); return;
-    }
-    if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
-    if(!ver.hasFile){alert('此版本没有上传文件');return;}
-    alert('文件未找到，可能需要重新上传');
+  };
+  if(ver.fileData){ doPreview(ver.fileData,ver.fileType,ver.fileName); return; }
+  loadFile(ver.id).then(function(f){
+    if(!f){alert('文件未找到，可能已被清除');return;}
+    doPreview(f.dataUrl,f.type,f.name);
   });
 }
-
 
 // Also add file upload to version form
 function openVersionForm(){
@@ -1907,10 +2073,10 @@ function saveVersion(){
     ver.fileType=versionFileData.type;
     ver.hasFile=true;
     uploadToStorage(vid,{id:vid,name:versionFileData.name,size:versionFileData.size,
-      type:versionFileData.type,dataUrl:versionFileData.dataUrl}).then(function(r){
-      if(r&&r.url){var ci=C.findIndex(function(x){return x.id===curViewCid;});
+      type:versionFileData.type,dataUrl:versionFileData.dataUrl}).then(function(url){
+      if(url){var ci=C.findIndex(function(x){return x.id===curViewCid;});
         if(ci!==-1){var vi=C[ci].versions.findIndex(function(v){return v.id===vid;});
-          if(vi!==-1){C[ci].versions[vi].storageUrl=r.url;save(SK.C,C);}}}
+          if(vi!==-1){C[ci].versions[vi].storageUrl=url;save(SK.C,C);}}}
     });
   }
   C[idx].versions.push(ver);
@@ -2209,8 +2375,8 @@ function startDriveScan(){
   q('di-prog-count').textContent = '';
   q('di-bar').style.width = '5%';
 
-  // 通过 Node.js 后端代理调用 Anthropic（隐藏 API Key）
-  fetch('/api/ai/analyze', {
+  // Call Anthropic API to list Drive folder files
+  fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -2300,8 +2466,8 @@ function processNextDriveFile(idx){
   q('di-bar').style.width = pct + '%';
   q('di-prog-count').textContent = (idx+1) + '/' + driveResults.length;
 
-  // 通过 Node.js 后端代理
-  fetch('/api/ai/analyze', {
+  // Call AI to read and recognize this file
+  fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -2474,36 +2640,25 @@ function strSimilarity(a, b){
   return common/longer.length;
 }
 
-// Find duplicate contracts for a given name+party+amount+contractNo
-function findDuplicates(name, party, amount, contractNo, excludeId){
+// Find duplicate contracts for a given name+party
+function findDuplicates(name, party, excludeId){
   var results=[];
   C.forEach(function(c){
     if(excludeId && c.id===excludeId) return;
-    var reasons=[];
-    var nameTrim=(name||'').trim().toLowerCase();
-    var cNameTrim=(c.name||'').trim().toLowerCase();
-    if(nameTrim && nameTrim===cNameTrim) reasons.push('名称完全相同');
-    var noTrim=(contractNo||'').trim();
-    if(noTrim && noTrim===c.id) reasons.push('合同编号相同');
-    var amtN=(amount||'').trim().replace(/\s/g,'').toLowerCase();
-    var cAmtN=(c.amount||'').trim().replace(/\s/g,'').toLowerCase();
-    if(amtN && cAmtN && amtN===cAmtN && party && c.party && strSimilarity(party,c.party)>=0.8) reasons.push('公司+金额相同');
-    var nameSim=strSimilarity(name,c.name);
-    var partySim=party && c.party ? strSimilarity(party,c.party) : 0.5;
-    var score=nameSim*0.7+partySim*0.3;
-    if(score>=0.6 && reasons.length===0) reasons.push('内容高度相似');
-    if(reasons.length>0){
-      var fs=reasons.some(function(r){return r==='名称完全相同'||r==='合同编号相同';}) ? 100 : Math.round(score*100);
-      results.push({contract:c, score:fs, reasons:reasons});
+    var nameSim = strSimilarity(name, c.name);
+    var partySim = party && c.party ? strSimilarity(party, c.party) : 0.5;
+    var score = nameSim*0.7 + partySim*0.3;
+    if(score >= 0.65){
+      results.push({contract:c, score:Math.round(score*100)});
     }
   });
   results.sort(function(a,b){return b.score-a.score;});
-  return results.slice(0,3);
+  return results.slice(0,3); // top 3
 }
 
 // Show duplicate warning modal
-function showDuplicateWarning(name, party, amount, contractNo, onProceed, onMerge){
-  var dups = findDuplicates(name, party, amount, contractNo, editCid);
+function showDuplicateWarning(name, party, onProceed, onMerge){
+  var dups = findDuplicates(name, party, editCid);
   if(!dups.length){ onProceed(); return; }
 
   // Build warning modal content
@@ -2525,11 +2680,8 @@ function showDuplicateWarning(name, party, amount, contractNo, onProceed, onMerg
     html += '<div style="flex:1">';
     html += '<div style="font-size:13px;font-weight:600;color:#1c2a1f">'+d.contract.name+'</div>';
     html += '<div style="font-size:11px;color:#8a9e92;margin-top:2px">'+d.contract.id+' · '+d.contract.party+'</div>';
-    html += '<div style="margin-top:5px">';
-    d.reasons.forEach(function(r){ html += '<span style="display:inline-block;font-size:10px;font-weight:700;background:#ffe0b2;color:#e65100;padding:1px 7px;border-radius:4px;margin-right:4px">'+r+'</span>'; });
     html += '</div>';
-    html += '</div>';
-    html += '<span style="font-size:11px;font-weight:700;color:#f57f17;background:#fff3e0;padding:2px 8px;border-radius:8px">'+d.score+'%</span>';
+    html += '<span style="font-size:11px;font-weight:700;color:#f57f17;background:#fff3e0;padding:2px 8px;border-radius:8px">相似度 '+d.score+'%</span>';
     html += '</div>';
   });
 
@@ -2568,7 +2720,7 @@ function showDuplicateWarning(name, party, amount, contractNo, onProceed, onMerg
 
 // Merge new upload into existing contract as a new version
 function showDupList(name, party){
-  var dups = findDuplicates(name, party, '', '', null);
+  var dups = findDuplicates(name, party, null);
   if(!dups.length){ alert('没有找到重复合同'); return; }
   var msg = '以下合同与「'+name+'」疑似重复：\n\n';
   dups.forEach(function(d){
@@ -2728,27 +2880,43 @@ q('searchInput').addEventListener('input',function(){
   if(!qv){renderContracts();return;}
   navTo('contracts');
   var f=C.filter(function(c){return c.name.toLowerCase().includes(qv)||c.party.toLowerCase().includes(qv)||c.id.toLowerCase().includes(qv);});
-  var tbody=q('contracts-tbody');var empty=q('contracts-empty');
-  if(!f.length){tbody.innerHTML='';empty.style.display='block';return;}
-  empty.style.display='none';tbody.innerHTML='';
-  f.forEach(function(c){
-    var tr=mk('tr');
-    var tdN=mk('td');var nm=mk('div','cn',c.name);nm.onclick=(function(id){return function(){openContractDetail(id);};})(c.id);var cid=mk('div','cid',c.id);tdN.appendChild(nm);tdN.appendChild(cid);
-    var tdP=mk('td','',c.party);var tdT=mk('td');tdT.appendChild(mk('span','ct',c.type));
-    // Company cell
-    var tdCo=mk('td');
-    if(c.company){
-      var coLabel=getCompanyLabel(c.company);
-      if(coLabel){var cos=mk('span','',coLabel);cos.style.cssText='font-size:11px;color:var(--accent);background:var(--al);padding:2px 7px;border-radius:10px;white-space:nowrap';tdCo.appendChild(cos);}
-    }
-    var tdS=mk('td');tdS.appendChild(mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status));
-    var tdDs=mk('td','cd',c.start||'--');var tdDe=mk('td','cd',c.end||'--');
-    var tdA=mk('td');var btns=mk('div','act-btns');
-    var bE=mk('button','act-btn','编辑');bE.onclick=(function(id){return function(){openContractForm(id);};})(c.id);
-    var bD=mk('button','act-btn del','删除');bD.onclick=(function(id){return function(){deleteContract(id);};})(c.id);
-    btns.appendChild(bE);btns.appendChild(bD);tdA.appendChild(btns);
-    [tdN,tdP,tdT,tdCo,tdS,tdDs,tdDe,tdA].forEach(function(td){tr.appendChild(td);});tbody.appendChild(tr);
+  var listEl=q('contracts-list');var empty=q('contracts-empty');
+  if(!f.length){listEl.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';listEl.innerHTML='';
+  // Render flat results (no grouping during search)
+  var resultCard=document.createElement('div');
+  resultCard.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;';
+  var colHdr=document.createElement('div');
+  colHdr.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:6px 14px;background:var(--surface2);';
+  ['合同名称','对方当事人','类型','状态','签署日期','到期日期','操作'].forEach(function(label,i){
+    var ch=document.createElement('div');ch.textContent=label;
+    ch.style.cssText='font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.3px;'+(i===6?'text-align:right':'');
+    colHdr.appendChild(ch);
   });
+  resultCard.appendChild(colHdr);
+  f.forEach(function(c){
+    var row=document.createElement('div');
+    row.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:9px 14px;border-top:1px solid var(--border);align-items:center;font-size:13px;cursor:pointer;';
+    row.onmouseover=function(){this.style.background='var(--surface2)';};
+    row.onmouseout=function(){this.style.background='';};
+    row.onclick=function(){openContractDetail(c.id);};
+    var colName=document.createElement('div');
+    var nm=mk('div','cn',c.name);nm.style.cssText='font-weight:600;color:var(--text);font-size:13px;';
+    var cid=mk('div','cid',c.id);cid.style.cssText='font-size:11px;color:var(--text3);margin-top:1px;';
+    colName.appendChild(nm);colName.appendChild(cid);
+    var colParty=document.createElement('div');colParty.textContent=c.party||'--';colParty.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    var colType=document.createElement('div');colType.appendChild(mk('span','ct',c.type||'--'));
+    var colStatus=document.createElement('div');colStatus.appendChild(mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status));
+    var colStart=document.createElement('div');colStart.textContent=c.start||'--';colStart.style.cssText='color:var(--text2);font-size:12px;';
+    var colEnd=document.createElement('div');colEnd.textContent=c.end||'--';colEnd.style.cssText='color:var(--text2);font-size:12px;';
+    var colAct=document.createElement('div');colAct.style.cssText='display:flex;gap:4px;justify-content:flex-end;';
+    var bE=mk('button','act-btn','编辑');bE.onclick=function(e){e.stopPropagation();openContractForm(c.id);};
+    var bD=mk('button','act-btn del','删除');bD.onclick=function(e){e.stopPropagation();deleteContract(c.id);};
+    colAct.appendChild(bE);colAct.appendChild(bD);
+    [colName,colParty,colType,colStatus,colStart,colEnd,colAct].forEach(function(col){row.appendChild(col);});
+    resultCard.appendChild(row);
+  });
+  listEl.appendChild(resultCard);
 });
 
 // ── Nav & filter event listeners ────────────────────────
@@ -3025,7 +3193,7 @@ function saveStepProgress(){
 }
 
 
-// Suppress server sync during initial load to prevent overwriting server data
+// Suppress Firebase sync during initial load to prevent overwriting cloud data
 _suppressFbSync = true;
 
 // Load from localStorage first (instant display)
@@ -3033,18 +3201,21 @@ C=load(SK.C,[]);E=load(SK.E,DEF_E);T=load(SK.T,DEF_T);TL=loadTl();
 M=load(SK.M,{nextGId:10,nextEId:20,nextCId:30,nextFId:10,nextTId:20});
 renderDashboard();renderContracts();renderGroupList();renderTplList();
 
-// Then load from server (authoritative source)
+// Then load from Firebase (authoritative source)
 fbLoadAll().then(function(){
-  // Cache to localStorage for instant next load
+  // Save Firebase data to localStorage as cache (without triggering Firebase sync)
   try{ localStorage.setItem(SK.C, JSON.stringify(C)); }catch(e){}
   try{ localStorage.setItem(SK.E, JSON.stringify(E)); }catch(e){}
   try{ localStorage.setItem(SK.T, JSON.stringify(T)); }catch(e){}
   try{ localStorage.setItem(SK.M, JSON.stringify(M)); }catch(e){}
+  // Now enable Firebase sync for future user actions
   _suppressFbSync = false;
+  // Re-render with Firebase data
   renderDashboard();renderContracts();renderGroupList();renderTplList();
-  console.log('Rendered with server data');
+  console.log('Rendered with Firebase data');
 }).catch(function(e){
-  console.warn('Server unavailable, using localStorage only:', e);
+  console.warn('Firebase unavailable, using localStorage only:', e);
+  // Enable sync so user actions still try to save
   _suppressFbSync = false;
 });
 
