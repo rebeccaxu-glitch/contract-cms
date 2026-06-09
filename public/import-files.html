@@ -7,73 +7,69 @@
   body{font-family:system-ui,sans-serif;max-width:560px;margin:60px auto;padding:20px;color:#1c2a1f;background:#f7f9f6;}
   h2{color:#2d5a3d;margin-bottom:6px;}
   p{color:#666;font-size:14px;margin-bottom:24px;}
-  .drop{border:2px dashed #aac8b0;border-radius:12px;padding:40px;text-align:center;cursor:pointer;background:#fff;transition:.2s;}
+  .drop{border:2px dashed #aac8b0;border-radius:12px;padding:40px;text-align:center;cursor:pointer;background:#fff;}
   .drop:hover{border-color:#2d5a3d;background:#f0f7f1;}
   .drop input{display:none;}
-  .log{margin-top:20px;font-size:13px;background:#fff;border-radius:8px;padding:16px;max-height:320px;overflow-y:auto;border:1px solid #dde8df;}
+  .log{margin-top:20px;font-size:13px;background:#fff;border-radius:8px;padding:16px;max-height:360px;overflow-y:auto;border:1px solid #dde8df;}
   .ok{color:#2d8a4e;} .err{color:#c62828;} .info{color:#666;}
-  .btn{display:inline-block;margin-top:16px;padding:10px 24px;background:#2d5a3d;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;border:none;}
-  .btn:hover{background:#1e3d2a;}
   #done{display:none;margin-top:16px;padding:14px;background:#e8f5e9;border-radius:8px;color:#2d5a3d;font-weight:600;text-align:center;}
 </style>
 </head>
 <body>
 <h2>📂 恢复合同文件到本地</h2>
-<p>选择备份 JSON 文件，系统会自动把所有合同文件恢复到这个浏览器，恢复后即可正常预览和下载。</p>
-
+<p>选择备份 JSON 文件，系统会自动把所有合同文件恢复到这个浏览器（使用 IndexedDB，支持大文件）。</p>
 <div class="drop" onclick="document.getElementById('fi').click()">
   <input type="file" id="fi" accept=".json">
   <div style="font-size:32px">📄</div>
   <div style="margin-top:8px;font-weight:600">点击选择备份文件</div>
   <div style="font-size:12px;color:#999;margin-top:4px">合同管理备份_xxx.json</div>
 </div>
-
 <div class="log" id="log"><span class="info">等待选择文件...</span></div>
 <div id="done">✅ 文件恢复完成！现在可以关闭此页，回到合同管理系统正常使用。</div>
-
 <script>
-var logEl = document.getElementById('log');
-function log(msg, cls){
-  var d = document.createElement('div');
-  d.className = cls||'info';
-  d.textContent = msg;
-  logEl.appendChild(d);
-  logEl.scrollTop = logEl.scrollHeight;
+function openDB(){
+  return new Promise(function(resolve,reject){
+    var req=indexedDB.open('cms_files',1);
+    req.onupgradeneeded=function(e){e.target.result.createObjectStore('files');};
+    req.onsuccess=function(e){resolve(e.target.result);};
+    req.onerror=function(e){reject(e);};
+  });
 }
+function idbSet(db,key,val){
+  return new Promise(function(resolve,reject){
+    var tx=db.transaction('files','readwrite');
+    tx.objectStore('files').put(val,key);
+    tx.oncomplete=function(){resolve();};
+    tx.onerror=function(e){reject(e);};
+  });
+}
+var logEl=document.getElementById('log');
+function log(msg,cls){var d=document.createElement('div');d.className=cls||'info';d.textContent=msg;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;}
 
-document.getElementById('fi').addEventListener('change', function(e){
-  var file = e.target.files[0];
-  if(!file) return;
-  logEl.innerHTML = '';
-  log('正在读取备份文件: ' + file.name);
-
-  var reader = new FileReader();
-  reader.onload = function(ev){
+document.getElementById('fi').addEventListener('change',function(e){
+  var file=e.target.files[0]; if(!file)return;
+  logEl.innerHTML='';
+  log('正在读取: '+file.name);
+  var reader=new FileReader();
+  reader.onload=function(ev){
     var backup;
-    try{ backup = JSON.parse(ev.target.result); }
-    catch(err){ log('❌ JSON 解析失败: ' + err.message, 'err'); return; }
-
-    var files = backup.files || [];
-    log('找到 ' + files.length + ' 个文件，开始写入 localStorage...', 'info');
-
-    var ok = 0, skip = 0, fail = 0;
-    files.forEach(function(f){
-      if(!f.id || !f.dataUrl){ log('⚠️ 跳过: ' + (f.name||f.id||'?') + '（无数据）', 'err'); skip++; return; }
-      try{
-        localStorage.setItem('file_' + f.id, f.dataUrl);
-        log('✅ ' + f.name, 'ok');
-        ok++;
-      } catch(e){
-        log('❌ ' + f.name + '（存储失败，可能空间不足）', 'err');
-        fail++;
-      }
-    });
-
-    log('──────────────────', 'info');
-    log('完成：成功 ' + ok + ' 个 / 跳过 ' + skip + ' 个 / 失败 ' + fail + ' 个', ok>0?'ok':'err');
-    if(ok > 0) document.getElementById('done').style.display = 'block';
+    try{backup=JSON.parse(ev.target.result);}catch(err){log('❌ JSON解析失败: '+err.message,'err');return;}
+    var files=backup.files||[];
+    log('找到 '+files.length+' 个文件，写入 IndexedDB...','info');
+    openDB().then(function(db){
+      var tasks=files.map(function(f){
+        if(!f.id||!f.dataUrl){log('⚠️ 跳过: '+(f.name||'?')+'（无数据）','err');return Promise.resolve();}
+        return idbSet(db,'file_'+f.id,f.dataUrl)
+          .then(function(){log('✅ '+f.name,'ok');})
+          .catch(function(e){log('❌ '+f.name+': '+e,'err');});
+      });
+      return Promise.all(tasks);
+    }).then(function(){
+      log('──────── 完成 ────────','info');
+      document.getElementById('done').style.display='block';
+    }).catch(function(e){log('❌ IndexedDB错误: '+e,'err');});
   };
-  reader.readAsText(file, 'utf-8');
+  reader.readAsText(file,'utf-8');
 });
 </script>
 </body>

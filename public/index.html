@@ -149,6 +149,39 @@ textarea.form-input{resize:vertical;}
 .section-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;padding-bottom:8px;border-top:none;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
 </style>
 <!-- Firebase SDK 已移除 — 数据通过 Node.js 后端 /api/* 读写 -->
+<script>
+// ── IndexedDB 文件存储（替代 localStorage，支持大文件）──
+var _idbReady = null;
+function getIDB(){
+  if(_idbReady) return _idbReady;
+  _idbReady = new Promise(function(resolve,reject){
+    var req = indexedDB.open('cms_files', 1);
+    req.onupgradeneeded = function(e){ e.target.result.createObjectStore('files'); };
+    req.onsuccess = function(e){ resolve(e.target.result); };
+    req.onerror = function(e){ reject(e); };
+  });
+  return _idbReady;
+}
+function idbSet(key, val){
+  return getIDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('files','readwrite');
+      tx.objectStore('files').put(val, key);
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(e){reject(e);};
+    });
+  });
+}
+function idbGet(key){
+  return getIDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var req=db.transaction('files','readonly').objectStore('files').get(key);
+      req.onsuccess=function(e){resolve(e.target.result||null);};
+      req.onerror=function(e){reject(e);};
+    });
+  });
+}
+</script>
 </head>
 <body>
 <aside class="sidebar">
@@ -624,8 +657,12 @@ function fbSaveAll(){
 function uploadToStorage(id, fileObj){
   if(!fileObj || !(fileObj.dataUrl || fileObj.b64)) return Promise.resolve(null);
   var dataUrl = fileObj.dataUrl || fileObj.b64;
-  try { localStorage.setItem('file_' + id, dataUrl); } catch(e){ console.warn('localStorage full:', e); }
-  return Promise.resolve({ url: 'local://' + id, name: fileObj.name || id });
+  return idbSet('file_' + id, dataUrl).then(function(){
+    return { url: 'local://' + id, name: fileObj.name || id };
+  }).catch(function(e){
+    console.warn('IndexedDB 存储失败:', e);
+    return null;
+  });
 }
 
 // ── 打开 / 下载文件（通过服务器代理）─────────────────────
@@ -1782,17 +1819,18 @@ function _triggerDownload(dataUrl, fileName){
 
 function downloadContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  var local=localStorage.getItem('file_'+ver.id);
-  if(local){ _triggerDownload(local, ver.fileName||'contract'); return; }
-  if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){ window.open(ver.storageUrl+'?download=1','_blank'); return; }
-  if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
-  if(!ver.hasFile){alert('此版本没有上传文件');return;}
-  alert('文件未找到，可能需要重新上传');
+  idbGet('file_'+ver.id).then(function(local){
+    if(local){ _triggerDownload(local, ver.fileName||'contract'); return; }
+    if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){ window.open(ver.storageUrl+'?download=1','_blank'); return; }
+    if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
+    if(!ver.hasFile){alert('此版本没有上传文件');return;}
+    alert('文件未找到，可能需要重新上传');
+  });
 }
 
 function previewContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  var local=localStorage.getItem('file_'+ver.id);
+  idbGet('file_'+ver.id).then(function(local){
   if(local){ var doLocal=function(du,ft,fn){
     try{var arr=du.split(','),mt=arr[0].match(/:(.*?);/)[1],b=atob(arr[1]),bb=new Uint8Array(b.length);
     for(var i=0;i<b.length;i++)bb[i]=b.charCodeAt(i);
