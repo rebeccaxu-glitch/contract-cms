@@ -1830,8 +1830,8 @@ function downloadContractFile(ver){
 
 function previewContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  idbGet('file_'+ver.id).then(function(local){
-  if(local){ var doLocal=function(du,ft,fn){
+  var _pvLocal=null; /* idb loaded below */
+  if(_pvLocal){ var doLocal=function(du,ft,fn){
     try{var arr=du.split(','),mt=arr[0].match(/:(.*?);/)[1],b=atob(arr[1]),bb=new Uint8Array(b.length);
     for(var i=0;i<b.length;i++)bb[i]=b.charCodeAt(i);
     var bl=new Blob([bb],{type:mt}),u=URL.createObjectURL(bl),a=document.createElement('a');
