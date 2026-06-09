@@ -1830,51 +1830,27 @@ function downloadContractFile(ver){
 
 function previewContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  var _pvLocal=null; /* idb loaded below */
-  if(_pvLocal){ var doLocal=function(du,ft,fn){
-    try{var arr=du.split(','),mt=arr[0].match(/:(.*?);/)[1],b=atob(arr[1]),bb=new Uint8Array(b.length);
-    for(var i=0;i<b.length;i++)bb[i]=b.charCodeAt(i);
-    var bl=new Blob([bb],{type:mt}),u=URL.createObjectURL(bl),a=document.createElement('a');
-    a.href=u;a.target='_blank';document.body.appendChild(a);a.click();
-    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},1000);}
-    catch(e){_triggerDownload(du,fn);}};
-    doLocal(local,ver.fileType||'',ver.fileName||'contract'); return; }
-  if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){ window.open(ver.storageUrl,'_blank'); return; }
-  if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
-  var doPreview=function(dataUrl,fileType,fileName){
-    // Convert data URL to Blob URL — more reliable than writing iframe
-    try {
-      var arr=dataUrl.split(',');
-      var mime=arr[0].match(/:(.*?);/)[1];
-      var bstr=atob(arr[1]);
-      var n=bstr.length;
-      var u8=new Uint8Array(n);
-      for(var i=0;i<n;i++) u8[i]=bstr.charCodeAt(i);
-      var blob=new Blob([u8],{type:mime});
-      var blobUrl=URL.createObjectURL(blob);
-      if(fileType&&fileType.includes('pdf')){
-        // Open PDF in new tab using blob URL
-        window.open(blobUrl,'_blank');
-      } else {
-        // Word: download directly
-        var a=document.createElement('a');
-        a.href=blobUrl;a.download=fileName||'contract';
-        document.body.appendChild(a);a.click();document.body.removeChild(a);
-        setTimeout(function(){URL.revokeObjectURL(blobUrl);},1000);
-      }
-    } catch(e){
-      // Fallback: use data URL directly
-      var a=document.createElement('a');
-      a.href=dataUrl;a.download=fileName||'contract';
-      document.body.appendChild(a);a.click();document.body.removeChild(a);
+  idbGet('file_'+ver.id).then(function(local){
+    if(local){
+      try{
+        var arr=local.split(','),mt=arr[0].match(/:(.*?);/)[1];
+        var b=atob(arr[1]),bb=new Uint8Array(b.length);
+        for(var i=0;i<b.length;i++) bb[i]=b.charCodeAt(i);
+        var bl=new Blob([bb],{type:mt}),u=URL.createObjectURL(bl);
+        window.open(u,'_blank');
+        setTimeout(function(){URL.revokeObjectURL(u);},10000);
+      }catch(e){ _triggerDownload(local, ver.fileName||'contract'); }
+      return;
     }
-  };
-  if(ver.fileData){ doPreview(ver.fileData,ver.fileType,ver.fileName); return; }
-  loadFile(ver.id).then(function(f){
-    if(!f){alert('文件未找到，可能已被清除');return;}
-    doPreview(f.dataUrl,f.type,f.name);
+    if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){
+      window.open(ver.storageUrl,'_blank'); return;
+    }
+    if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
+    if(!ver.hasFile){alert('此版本没有上传文件');return;}
+    alert('文件未找到，可能需要重新上传');
   });
 }
+
 
 // Also add file upload to version form
 function openVersionForm(){
