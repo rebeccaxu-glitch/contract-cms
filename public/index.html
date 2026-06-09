@@ -623,21 +623,9 @@ function fbSaveAll(){
 // 返回 Promise<{ url, name } | null>
 function uploadToStorage(id, fileObj){
   if(!fileObj || !(fileObj.dataUrl || fileObj.b64)) return Promise.resolve(null);
-  // 把 dataUrl 转成 Blob，再组装 FormData
-  var dataUrl  = fileObj.dataUrl || fileObj.b64;
-  var parts    = dataUrl.split(',');
-  var mime     = parts[0].match(/:(.*?);/)[1];
-  var bstr     = atob(parts[1]);
-  var buf      = new Uint8Array(bstr.length);
-  for(var i=0; i<bstr.length; i++) buf[i] = bstr.charCodeAt(i);
-  var blob     = new Blob([buf], {type: mime});
-  var fd       = new FormData();
-  fd.append('fileId', id);
-  fd.append('file',   blob, fileObj.name || id);
-  return fetch('/api/files/upload', { method: 'POST', body: fd })
-    .then(function(r){ return r.json(); })
-    .then(function(d){ return d.url ? { url: d.url, name: d.name } : null; })
-    .catch(function(e){ console.warn('File upload failed:', e); return null; });
+  var dataUrl = fileObj.dataUrl || fileObj.b64;
+  try { localStorage.setItem('file_' + id, dataUrl); } catch(e){ console.warn('localStorage full:', e); }
+  return Promise.resolve({ url: 'local://' + id, name: fileObj.name || id });
 }
 
 // ── 打开 / 下载文件（通过服务器代理）─────────────────────
@@ -1794,15 +1782,26 @@ function _triggerDownload(dataUrl, fileName){
 
 function downloadContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  if(ver.storageUrl){ window.open(ver.storageUrl+'?download=1','_blank'); return; }
-  if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
+  var local=localStorage.getItem('file_'+ver.id);
+  if(local){ _triggerDownload(local, ver.fileName||'contract'); return; }
+  if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){ window.open(ver.storageUrl+'?download=1','_blank'); return; }
   if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
+  if(!ver.hasFile){alert('此版本没有上传文件');return;}
   alert('文件未找到，可能需要重新上传');
 }
 
 function previewContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
-  if(ver.storageUrl){ window.open(ver.storageUrl,'_blank'); return; }
+  var local=localStorage.getItem('file_'+ver.id);
+  if(local){ var doLocal=function(du,ft,fn){
+    try{var arr=du.split(','),mt=arr[0].match(/:(.*?);/)[1],b=atob(arr[1]),bb=new Uint8Array(b.length);
+    for(var i=0;i<b.length;i++)bb[i]=b.charCodeAt(i);
+    var bl=new Blob([bb],{type:mt}),u=URL.createObjectURL(bl),a=document.createElement('a');
+    a.href=u;a.target='_blank';document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},1000);}
+    catch(e){_triggerDownload(du,fn);}};
+    doLocal(local,ver.fileType||'',ver.fileName||'contract'); return; }
+  if(ver.storageUrl&&!ver.storageUrl.startsWith('local://')){ window.open(ver.storageUrl,'_blank'); return; }
   if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
   var doPreview=function(dataUrl,fileType,fileName){
     // Convert data URL to Blob URL — more reliable than writing iframe
