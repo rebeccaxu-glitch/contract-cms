@@ -925,6 +925,12 @@ var BRANDS_DEFAULT = [
 var BRANDS = (function(){
   var s=load(SK.BRANDS);
   if(!s||!s.length) return JSON.parse(JSON.stringify(BRANDS_DEFAULT));
+  // Clean corrupted entity names (e.g. "公司名[English translation appended]")
+  s.forEach(function(b){
+    if(b.entities)b.entities.forEach(function(e){
+      if(e.name&&e.name.indexOf('[')>-1)e.name=e.name.substring(0,e.name.indexOf('[')).trim();
+    });
+  });
   // Merge: ensure all default brands and their entities exist
   BRANDS_DEFAULT.forEach(function(def){
     var existing=null;
@@ -3844,7 +3850,7 @@ fbLoadAll().then(function(){
       <div style="font-size:15px;font-weight:700;color:var(--text);">⚙ Manage Brands &amp; Entities</div>
       <span class="modal-close" onclick="closeModal('modal-brand-manager')">×</span>
     </div>
-    <div id="bm-list" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;"></div>
+    <div id="bm-list" style="flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;"></div>
     <div style="display:flex;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--border);flex-shrink:0;">
       <button class="btn btn-ghost" onclick="addBrand()">＋ Add Brand</button>
       <div style="flex:1;"></div>
