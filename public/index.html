@@ -1311,7 +1311,17 @@ function renderBrandTree(){
         eRow.className='entity-row'+(curEntityFilter===ent.name&&curBrandFilter===brand.key?' active':'');
         eRow.style.position='relative';
 
-        var flag=mk('span','',ent.flag);flag.style.cssText='font-size:11px;flex-shrink:0;';
+        var flag=mk('span','',ent.flag);
+        flag.style.cssText='font-size:11px;flex-shrink:0;cursor:pointer;padding:0 2px;border-radius:3px;';
+        flag.title='Click to change flag';
+        flag.onclick=(function(bi2,ei2,fl){return function(e){
+          e.stopPropagation();
+          var inp=document.createElement('input');inp.type='text';inp.value=BRANDS[bi2].entities[ei2].flag;
+          inp.style.cssText='width:36px;border:1px solid var(--accent);border-radius:3px;padding:1px 3px;font-size:13px;text-align:center;background:var(--surface2);color:var(--text);';
+          eRow.replaceChild(inp,fl);inp.focus();inp.select();
+          function done(){var v=inp.value.trim();if(v)BRANDS[bi2].entities[ei2].flag=v;save(SK.BRANDS,BRANDS);renderBrandTree();}
+          inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=BRANDS[bi2].entities[ei2].flag;inp.blur();}};
+        };})(bi,ei,flag);
 
         var nameLbl=mk('span','entity-name-txt',ent.name);
         nameLbl.onclick=(function(bk,en){return function(e){e.stopPropagation();selectEntity(bk,en);};})(brand.key,ent.name);
