@@ -1783,9 +1783,9 @@ function renderContracts(){
   var brandNames={};
   BRANDS.forEach(function(b){brandNames[b.key]=b.name;});
 
-  var COL_GRID='minmax(130px,220px) minmax(130px,200px) minmax(90px,150px) 88px 88px 110px 65px 95px 130px';
-  var COL_LABELS=['Name (File)','Counterparty','Contract Type','Start Date','End Date','Value / Fees','Renew','Notice','Actions'];
-  var AI_COLS=[2,5,7];
+  var COL_GRID='minmax(130px,220px) minmax(100px,160px) minmax(110px,180px) minmax(90px,150px) 88px 88px 110px 65px 95px 130px';
+  var COL_LABELS=['Name (File)','Entity','Counterparty','Contract Type','Start Date','End Date','Value / Fees','Renew','Notice','Actions'];
+  var AI_COLS=[3,6,8];
 
   // Helper: build a contract row element
   function buildContractRow(c){
@@ -1812,6 +1812,11 @@ function renderContracts(){
       db.onclick=function(e){e.stopPropagation();showDupList(c.name,c.party);};
       c1.appendChild(db);
     }
+
+    var cEnt=document.createElement('div');
+    cEnt.style.cssText='overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    if(c.entity){var entSpan=mk('span','',c.entity);entSpan.style.cssText='color:var(--text2);font-size:11px;';cEnt.appendChild(entSpan);}
+    else{cEnt.textContent='—';cEnt.style.color='var(--border)';}
 
     var c2=document.createElement('div');c2.textContent=c.party||'—';c2.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
@@ -1860,7 +1865,7 @@ function renderContracts(){
     row.onmouseover=function(){this.style.background='var(--al)';this.querySelectorAll('.inline-edit-btn').forEach(function(b){b.style.opacity='1';});};
     row.onmouseout=function(){this.style.background='';this.querySelectorAll('.inline-edit-btn').forEach(function(b){b.style.opacity='0';});};
 
-    [c1,c2,c3,c4,c5,c6,c7,c8,c10].forEach(function(col){row.appendChild(col);});
+    [c1,cEnt,c2,c3,c4,c5,c6,c7,c8,c10].forEach(function(col){row.appendChild(col);});
     return row;
   }
 
