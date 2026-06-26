@@ -20,6 +20,13 @@ body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text
 .nav-item.active{background:var(--al);color:var(--accent);font-weight:600;border-left-color:var(--accent);}
 .nav-item .ni{font-size:14px;width:18px;text-align:center;}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;font-family:'JetBrains Mono',monospace;display:none;}
+.nav-view-cnt{font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 5px;min-width:16px;text-align:center;margin-left:auto;}
+.ic-ent-row{display:flex;align-items:center;gap:5px;padding:5px 10px 5px 22px;cursor:pointer;font-size:11px;color:var(--text2);font-weight:600;}
+.ic-ent-row:hover,.ic-ent-row.active{background:var(--surface2);color:var(--text);}
+.ic-cp-row{display:flex;align-items:center;gap:5px;padding:3px 10px 3px 34px;cursor:pointer;font-size:11px;color:var(--text3);}
+.ic-cp-row:hover,.ic-cp-row.active{background:var(--surface2);color:var(--text2);}
+.ic-arrow{font-size:10px;flex-shrink:0;color:var(--text3);}
+.ic-cp-wrap{display:none;}
 .sidebar-footer{padding:12px 10px;border-top:1px solid var(--border);}
 .user-card{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;}
 .user-card:hover{background:var(--surface2);}
@@ -178,15 +185,22 @@ textarea.form-input{resize:vertical;}
 <aside class="sidebar">
   <div class="logo"><div class="logo-tag">CMS</div><div class="logo-name">Contracts</div></div>
   <nav class="nav" style="flex:1;overflow-y:auto;padding-bottom:8px;">
-    <div class="nav-item active" data-page="contracts"><span class="ni">📄</span>Contract List</div>
-    <!-- Brand tree — nested under Contract List, shown when contracts page active -->
-    <div id="brand-tree" style="display:flex;flex-direction:column;">
-      <div class="brand-all-row active" id="brand-all-row" onclick="selectBrandAll()">
+    <!-- ① All contracts -->
+    <div class="nav-item" id="nav-view-all" onclick="setView('all')"><span class="ni">📋</span><span style="flex:1;">All contracts</span><span class="nav-view-cnt" id="nav-all-cnt"></span></div>
+    <!-- ② External — brand tree nested below -->
+    <div class="nav-item" id="nav-view-external" onclick="setView('external')"><span class="ni">🏢</span><span style="flex:1;">External</span><span class="nav-view-cnt" id="nav-ext-cnt"></span></div>
+    <div id="brand-tree" style="display:none;flex-direction:column;">
+      <div class="brand-all-row" id="brand-all-row" onclick="selectBrandAll()">
         <span style="font-size:11px;color:var(--text3);">◻</span>
-        <span style="flex:1;">All contracts</span>
+        <span style="flex:1;">All external</span>
         <span class="brand-cnt" id="brand-all-count">0</span>
       </div>
       <div id="brand-list"></div>
+    </div>
+    <!-- ③ Intercompany — entity→counterparty tree nested below -->
+    <div class="nav-item" id="nav-view-intercompany" onclick="setView('intercompany')"><span class="ni">🔄</span><span style="flex:1;">Intercompany</span><span class="nav-view-cnt" id="nav-ic-cnt"></span></div>
+    <div id="ic-tree" style="display:none;flex-direction:column;">
+      <div id="ic-list"></div>
     </div>
     <div class="nav-item" data-page="templates"><span class="ni">📁</span>Templates</div>
     <div class="nav-item" data-page="calendar"><span class="ni">📅</span>Expiry Calendar<span class="nav-badge" id="badge-expiring"></span></div>
@@ -493,7 +507,7 @@ textarea.form-input{resize:vertical;}
         <input class="form-input" id="cf-type" type="text" list="cf-type-list" placeholder="Service Agreement / Lease / NDA…">
         <datalist id="cf-type-list"><option>Service Agreement</option><option>Lease</option><option>NDA</option><option>Employment</option><option>Purchase</option><option>Cooperation</option><option>Financial</option><option>Data Processing</option><option>Other</option><option>服务协议</option><option>租赁合同</option><option>保密协议</option><option>劳动合同</option><option>采购合同</option><option>合作协议</option></datalist>
       </div>
-      <div><label class="form-label">Counterparty *</label><input class="form-input" id="cf-party" type="text"></div>
+      <div><label class="form-label">Counterparty *</label><input class="form-input" id="cf-party" type="text" oninput="onCfPartyChange()"></div>
       <div><label class="form-label">Brand</label><select class="form-input" id="cf-brand" onchange="updateEntityOptions()">
         <option value="">— Not specified —</option>
         <option value="orbitlabs">Orbitlabs</option>
@@ -525,6 +539,24 @@ textarea.form-input{resize:vertical;}
         <div style="width:90px;"><label class="form-label">Unit</label><select class="form-input" id="cf-notice-unit"><option value="days">days</option><option value="months">months</option><option value="years">years</option></select></div>
       </div>
       <div class="fg-full"><label class="form-label">Notes <span class="ai-badge-sm">AI</span></label><textarea class="form-input" id="cf-notes" rows="2"></textarea></div>
+      <div class="fg-full" style="border-top:1px solid var(--border);padding-top:12px;margin-top:2px;">
+        <label class="form-label">Intercompany <span style="font-size:10px;font-weight:400;color:var(--text3);">— auto-detected from counterparty, can override</span></label>
+        <div class="final-toggle" style="margin-bottom:8px;">
+          <div class="ftoggle-btn" id="cf-ic-yes" onclick="setCfIC(true)">✓ Yes — internal agreement</div>
+          <div class="ftoggle-btn selected" id="cf-ic-no" onclick="setCfIC(false)">✗ No — external</div>
+        </div>
+        <div id="cf-ic-type-wrap" style="display:none;">
+          <label class="form-label">Agreement type</label>
+          <select class="form-input" id="cf-ic-type">
+            <option value="">— Select type —</option>
+            <option value="service">Service agreement</option>
+            <option value="outsourcing">Outsourcing</option>
+            <option value="loan">Intercompany loan</option>
+            <option value="ip">IP / Licence</option>
+            <option value="cost">Cost allocation</option>
+          </select>
+        </div>
+      </div>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-contract-form')">Cancel</button><button class="btn btn-primary" onclick="saveContract()">Save</button></div>
   </div>
@@ -948,10 +980,14 @@ var BRAND_COLORS=['#1d9e75','#378add','#d85a30','#7f77dd','#ba7517','#d4537e','#
 
 // ── State ──────────────────────────────────────────────
 var C, E, T, M;
-var curFilter   = 'all';
-var curBrandFilter  = null; // null = all brands
-var curEntityFilter = null; // null = all entities within brand
-var collapsedBrands = {}; // tracks open/closed state of brand rows in sidebar
+var curFilter       = 'all';
+var curView         = 'all';      // 'all' | 'external' | 'intercompany'
+var curBrandFilter  = null;
+var curEntityFilter = null;
+var curIcEntity     = null;       // selected entity in intercompany tree
+var curIcCp         = null;       // selected counterparty in intercompany tree
+var collapsedBrands = {};
+var collapsedIcEnts = {};         // open/closed state of entity rows in ic tree
 var collapsedGroups = {}; // tracks collapsed state per contract group
 var editCid     = null;
 var curGrpId    = null;
@@ -1028,6 +1064,117 @@ function genId(dateStr){
 
 // ── Navigation ──────────────────────────────────────────
 var PAGE_TITLES = {contracts:'Contract List',upload:'Upload Contract',entities:'Entities',templates:'Templates',timeline:'Approval Flow',calendar:'Expiry Calendar',alerts:'Reminders'};
+
+// ── Auto-detect intercompany contracts ──────────────────
+function isIntercompanyContract(c){
+  if(c.isIntercompany===true)return true;
+  if(c.isIntercompany===false)return false;
+  // Auto-detect: counterparty matches any known entity name
+  if(!c.counterparty)return false;
+  var cp=c.counterparty.trim().toLowerCase();
+  for(var i=0;i<BRANDS.length;i++){
+    var b=BRANDS[i];
+    for(var j=0;j<b.entities.length;j++){
+      if(b.entities[j].name.trim().toLowerCase()===cp)return true;
+    }
+  }
+  return false;
+}
+
+// ── View switching (All / External / Intercompany) ──────
+function setView(view){
+  curView=view;
+  curBrandFilter=null;curEntityFilter=null;curIcEntity=null;curIcCp=null;
+  // Switch to contracts page
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  var pg=q('page-contracts');if(pg)pg.classList.add('active');
+  setText('pageTitle',view==='intercompany'?'Intercompany':view==='external'?'External Contracts':'All Contracts');
+  // Update nav active states
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  var vn=q('nav-view-'+view);if(vn)vn.classList.add('active');
+  // Show/hide trees
+  var bt=q('brand-tree'),it=q('ic-tree');
+  if(bt)bt.style.display=(view==='external'?'flex':'none');
+  if(it)it.style.display=(view==='intercompany'?'flex':'none');
+  // Render
+  if(view==='external')renderBrandTree();
+  if(view==='intercompany')renderIcTree();
+  updateNavCounts();
+  renderContracts();
+}
+
+function updateNavCounts(){
+  var allC=C||[];
+  var extC=allC.filter(function(c){return!isIntercompanyContract(c);});
+  var icC=allC.filter(function(c){return isIntercompanyContract(c);});
+  function setCnt(id,n){var e=q(id);if(e)e.textContent=n;}
+  setCnt('nav-all-cnt',allC.length);
+  setCnt('nav-ext-cnt',extC.length);
+  setCnt('nav-ic-cnt',icC.length);
+}
+
+// ── Intercompany sidebar tree ───────────────────────────
+function renderIcTree(){
+  var il=q('ic-list');if(!il)return;
+  il.innerHTML='';
+  var icContracts=(C||[]).filter(isIntercompanyContract);
+  // Group by c.entity (our entity) → c.counterparty
+  var entMap={};var entOrder=[];
+  icContracts.forEach(function(c){
+    var ek=c.entity||'(unassigned)';
+    if(!entMap[ek]){entMap[ek]={flag:'',cps:{},cpOrder:[]};entOrder.push(ek);}
+    // Find flag for this entity
+    if(!entMap[ek].flag){
+      BRANDS.forEach(function(b){b.entities.forEach(function(e){if(e.name===ek)entMap[ek].flag=e.flag;});});
+    }
+    var cpk=c.counterparty||'(unknown)';
+    if(!entMap[ek].cps[cpk]){entMap[ek].cps[cpk]=0;entMap[ek].cpOrder.push(cpk);}
+    entMap[ek].cps[cpk]++;
+  });
+  entOrder.forEach(function(ek){
+    var em=entMap[ek];
+    var isOpen=!!collapsedIcEnts[ek];
+    // Entity row
+    var eRow=document.createElement('div');
+    eRow.className='ic-ent-row'+(curIcEntity===ek&&!curIcCp?' active':'');
+    var chev=mk('span','',isOpen?'▾':'▸');chev.style.cssText='font-size:10px;color:var(--text3);flex-shrink:0;';
+    var flag=mk('span','',em.flag||'🏢');flag.style.cssText='font-size:11px;flex-shrink:0;';
+    var lbl=mk('span','',ek);lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    var cnt=mk('span','brand-cnt',''+icContracts.filter(function(c){return (c.entity||'(unassigned)')===ek;}).length);
+    eRow.appendChild(chev);eRow.appendChild(flag);eRow.appendChild(lbl);eRow.appendChild(cnt);
+    // Counterparty wrapper
+    var cpWrap=document.createElement('div');
+    cpWrap.className='ic-cp-wrap';
+    if(isOpen)cpWrap.style.display='block';
+    em.cpOrder.forEach(function(cpk){
+      var cpRow=document.createElement('div');
+      cpRow.className='ic-cp-row'+(curIcEntity===ek&&curIcCp===cpk?' active':'');
+      var arrow=mk('span','ic-arrow','↔');
+      var cpLbl=mk('span','',cpk);cpLbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      var cpCnt=mk('span','brand-cnt',''+em.cps[cpk]);
+      cpRow.appendChild(arrow);cpRow.appendChild(cpLbl);cpRow.appendChild(cpCnt);
+      cpRow.onclick=(function(ek2,cpk2){return function(e){
+        e.stopPropagation();curIcEntity=ek2;curIcCp=cpk2;renderIcTree();renderContracts();
+      };})(ek,cpk);
+      cpWrap.appendChild(cpRow);
+    });
+    eRow.onclick=(function(ek2,cw,ch){return function(e){
+      e.stopPropagation();
+      var nowOpen=!collapsedIcEnts[ek2];
+      collapsedIcEnts[ek2]=nowOpen;
+      cw.style.display=nowOpen?'block':'none';
+      ch.textContent=nowOpen?'▾':'▸';
+      curIcEntity=ek2;curIcCp=null;renderIcTree();renderContracts();
+    };})(ek,cpWrap,chev);
+    il.appendChild(eRow);il.appendChild(cpWrap);
+  });
+  if(!entOrder.length){
+    var empty=mk('div','','No intercompany contracts yet');
+    empty.style.cssText='padding:8px 14px;font-size:11px;color:var(--text3);';
+    il.appendChild(empty);
+  }
+}
+
 function navTo(pid){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var pg=q('page-'+pid);if(!pg)return;
@@ -1036,10 +1183,21 @@ function navTo(pid){
   document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
   var ni=document.querySelector('[data-page="'+pid+'"]');
   if(ni)ni.classList.add('active');
-  // Show/hide brand tree
-  var bt=q('brand-tree');
-  if(bt)bt.style.display=(pid==='contracts'?'flex':'none');
-  if(pid==='contracts'){renderBrandTree();renderContracts();}
+  // Show/hide trees (keep current view trees if going to contracts)
+  if(pid!=='contracts'){
+    var bt=q('brand-tree'),it=q('ic-tree');
+    if(bt)bt.style.display='none';
+    if(it)it.style.display='none';
+  }
+  if(pid==='contracts'){
+    var bt2=q('brand-tree'),it2=q('ic-tree');
+    if(bt2)bt2.style.display=(curView==='external'?'flex':'none');
+    if(it2)it2.style.display=(curView==='intercompany'?'flex':'none');
+    // Re-activate view nav item
+    document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+    var vn=q('nav-view-'+curView);if(vn)vn.classList.add('active');
+    renderBrandTree();renderContracts();updateNavCounts();
+  }
   if(pid==='entities')renderGroupList();
   if(pid==='templates')renderTplList();
   if(pid==='alerts')renderAlerts();
@@ -1186,17 +1344,17 @@ function renderBrandTree(){
 }
 
 function selectBrandAll(){
-  curBrandFilter=null;curEntityFilter=null;
+  curView='external';curBrandFilter=null;curEntityFilter=null;curIcEntity=null;curIcCp=null;
   document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.add('active');});
   navTo('contracts');
 }
 function selectBrand(key){
-  curBrandFilter=key;curEntityFilter=null;
+  curView='external';curBrandFilter=key;curEntityFilter=null;curIcEntity=null;curIcCp=null;
   document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
   navTo('contracts');
 }
 function selectEntity(brandKey,entityName){
-  curBrandFilter=brandKey;curEntityFilter=entityName;
+  curView='external';curBrandFilter=brandKey;curEntityFilter=entityName;curIcEntity=null;curIcCp=null;
   document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
   navTo('contracts');
 }
@@ -1341,6 +1499,23 @@ function setCfAutoRenewal(v){
   if(y)y.classList.toggle('selected',v);
   if(n)n.classList.toggle('selected',!v);
 }
+// ── Intercompany toggle ──────────────────────────────────
+var cfIsIC=false;
+function setCfIC(v){
+  cfIsIC=!!v;
+  var y=q('cf-ic-yes'),n=q('cf-ic-no');
+  if(y)y.classList.toggle('selected',cfIsIC);
+  if(n)n.classList.toggle('selected',!cfIsIC);
+  var w=q('cf-ic-type-wrap');if(w)w.style.display=cfIsIC?'block':'none';
+}
+// Auto-detect when counterparty field changes
+function onCfPartyChange(){
+  var cp=getVal('cf-party');
+  // Only auto-update if user hasn't explicitly overridden
+  if(!editCid){
+    setCfIC(isIntercompanyContract({counterparty:cp}));
+  }
+}
 function setUploadAutoRenewal(v){
   uploadAutoRenewal=v;
   var y=q('f-ar-yes'),n=q('f-ar-no');
@@ -1479,12 +1654,18 @@ function renderContracts(){
 
   var base=curFilter==='all'?C:curFilter==='active'?active:curFilter==='expiring'?expiring:expired;
 
-  // Apply sidebar brand/entity filter
+  // Apply view filter first
   var filtered=base;
+  if(curView==='external')filtered=filtered.filter(function(c){return!isIntercompanyContract(c);});
+  if(curView==='intercompany')filtered=filtered.filter(function(c){return isIntercompanyContract(c);});
+
+  // Apply sidebar brand/entity filter (external view)
   if(curBrandFilter)filtered=filtered.filter(function(c){return c.brand===curBrandFilter;});
-  if(curEntityFilter){
-    filtered=filtered.filter(function(c){return c.entity===curEntityFilter;});
-  }
+  if(curEntityFilter)filtered=filtered.filter(function(c){return c.entity===curEntityFilter;});
+
+  // Apply intercompany entity/counterparty filter
+  if(curIcEntity)filtered=filtered.filter(function(c){return(c.entity||'(unassigned)')===curIcEntity;});
+  if(curIcCp)filtered=filtered.filter(function(c){return(c.counterparty||'(unknown)')===curIcCp;});
 
   var listEl=q('contracts-list');
   var empty=q('contracts-empty');
@@ -1604,6 +1785,69 @@ function renderContracts(){
       colHdr.appendChild(ch);
     });
     return colHdr;
+  }
+
+  // ── Intercompany view: group by Entity → Counterparty ──
+  if(curView==='intercompany'){
+    var icEntMap={};var icEntOrder=[];
+    filtered.forEach(function(c){
+      var ek=c.entity||'(unassigned)';
+      var cpk=c.counterparty||'(unknown counterparty)';
+      if(!icEntMap[ek]){icEntMap[ek]={cps:{},cpOrder:[]};icEntOrder.push(ek);}
+      if(!icEntMap[ek].cps[cpk]){icEntMap[ek].cps[cpk]=[];icEntMap[ek].cpOrder.push(cpk);}
+      icEntMap[ek].cps[cpk].push(c);
+    });
+    icEntOrder.forEach(function(ek){
+      var eData=icEntMap[ek];
+      var entDef=null;
+      BRANDS.forEach(function(b){b.entities.forEach(function(e){if(e.name===ek)entDef=e;});});
+      var flag=entDef?entDef.flag:'🏢';
+      var totalCount=0;
+      eData.cpOrder.forEach(function(cpk){totalCount+=eData.cps[cpk].length;});
+      var collapseKey='ic-ent:'+ek;
+      var isCollapsed=collapsedGroups[collapseKey]===true;
+      var card=document.createElement('div');
+      card.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;';
+      // Entity header
+      var eHdr=document.createElement('div');
+      eHdr.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none;';
+      eHdr.onmouseover=function(){this.style.background='var(--surface2)';};eHdr.onmouseout=function(){this.style.background='';};
+      var eFlagSp=mk('span','',flag);eFlagSp.style.fontSize='14px';
+      var eLbl=mk('span','',ek);eLbl.style.cssText='font-size:13px;font-weight:700;color:var(--text);flex:1;';
+      var eBadge=mk('span','',totalCount+'');eBadge.style.cssText='min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text3);display:inline-flex;align-items:center;justify-content:center;';
+      var eChev=mk('span','','▾');eChev.style.cssText='color:var(--text3);font-size:13px;transform:'+(isCollapsed?'rotate(-90deg)':'rotate(0deg)')+';';
+      eHdr.appendChild(eFlagSp);eHdr.appendChild(eLbl);eHdr.appendChild(eBadge);eHdr.appendChild(eChev);
+      var eBody=document.createElement('div');
+      eBody.style.cssText='border-top:1px solid var(--border);'+(isCollapsed?'display:none;':'');
+      eData.cpOrder.forEach(function(cpk,ci){
+        var contracts=eData.cps[cpk];
+        var cpCollapseKey='ic-cp:'+ek+'||'+cpk;
+        var isCpCollapsed=collapsedGroups[cpCollapseKey]===true;
+        var cpHdr=document.createElement('div');
+        cpHdr.style.cssText='display:flex;align-items:center;gap:6px;padding:7px 14px 7px 24px;cursor:pointer;user-select:none;background:var(--surface2);'+(ci>0?'border-top:1px solid var(--border);':'');
+        cpHdr.onmouseover=function(){this.style.filter='brightness(0.97)';};cpHdr.onmouseout=function(){this.style.filter='';};
+        var cpChev=mk('span','','▾');cpChev.style.cssText='color:var(--text3);font-size:11px;transform:'+(isCpCollapsed?'rotate(-90deg)':'rotate(0deg)')+';';
+        var cpArrow=mk('span','','↔');cpArrow.style.cssText='font-size:11px;color:var(--text3);flex-shrink:0;';
+        var cpLbl=mk('span','',cpk);cpLbl.style.cssText='font-size:12px;font-weight:600;color:var(--text2);flex:1;';
+        var cpBadge=mk('span','',''+contracts.length);cpBadge.style.cssText='font-size:11px;color:var(--text3);padding:0 6px;background:var(--border);border-radius:8px;';
+        cpHdr.appendChild(cpChev);cpHdr.appendChild(cpArrow);cpHdr.appendChild(cpLbl);cpHdr.appendChild(cpBadge);
+        var cpBody=document.createElement('div');
+        cpBody.style.display=isCpCollapsed?'none':'';
+        cpBody.appendChild(buildColHeader('16px'));
+        contracts.forEach(function(c){cpBody.appendChild(buildContractRow(c));});
+        cpHdr.onclick=(function(ek2,cpk2,cb,cc){return function(){
+          var now=cb.style.display==='none';cb.style.display=now?'':'none';cc.style.transform=now?'rotate(0deg)':'rotate(-90deg)';
+          collapsedGroups['ic-cp:'+ek2+'||'+cpk2]=!now;
+        };})(ek,cpk,cpBody,cpChev);
+        eBody.appendChild(cpHdr);eBody.appendChild(cpBody);
+      });
+      eHdr.onclick=(function(ek2,eb,ec){return function(){
+        var now=eb.style.display==='none';eb.style.display=now?'':'none';ec.style.transform=now?'rotate(0deg)':'rotate(-90deg)';
+        collapsedGroups['ic-ent:'+ek2]=!now;
+      };})(ek,eBody,eChev);
+      card.appendChild(eHdr);card.appendChild(eBody);listEl.appendChild(card);
+    });
+    return;
   }
 
   // Build two-level Brand → Entity structure
@@ -1753,6 +1997,10 @@ function openContractForm(id){
   setOpt('cf-notice-unit',c?c.noticePeriodUnit||'days':'days');
   // Notes
   setVal('cf-notes',c?c.notes||'':'');
+  // Intercompany — auto-detect then apply manual override if set
+  var icVal=c&&c.isIntercompany!==undefined?c.isIntercompany:isIntercompanyContract(c||{counterparty:getVal('cf-party')});
+  setCfIC(icVal);
+  setOpt('cf-ic-type',c?c.icType||'':'');
   openModal('modal-contract-form');
 }
 function updateCfId(){if(!editCid)setVal('cf-id',genId(getVal('cf-start')));}
@@ -1775,6 +2023,8 @@ function saveContract(){
     start:getVal('cf-start'),
     end:getVal('cf-end'),
     notes:getVal('cf-notes').trim(),
+    isIntercompany:cfIsIC,
+    icType:cfIsIC?(getVal('cf-ic-type')||''):'',
     versions:[]
   };
 
@@ -1782,7 +2032,7 @@ function saveContract(){
     showDuplicateWarning(name,party,
       function(){
         C.push(data);
-        save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();renderBrandTree();
+        save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();renderBrandTree();updateNavCounts();
       },
       function(existing){mergeIntoExisting(existing);}
     );
@@ -1790,7 +2040,7 @@ function saveContract(){
   }
   var idx=C.findIndex(function(x){return x.id===editCid;});
   if(idx!==-1){data.versions=C[idx].versions||[];C[idx]=data;}
-  save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();renderBrandTree();
+  save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();renderBrandTree();updateNavCounts();
 }
 
 // ── Contract detail / versions ──────────────────────────
@@ -3794,7 +4044,8 @@ _suppressFbSync = true;
 // Load from localStorage first (instant display)
 C=load(SK.C,[]);E=load(SK.E,DEF_E);T=load(SK.T,DEF_T);TL=loadTl();
 M=load(SK.M,{nextGId:10,nextEId:20,nextCId:30,nextFId:10,nextTId:20});
-renderDashboard();renderContracts();renderGroupList();renderTplList();
+setView('all');
+renderDashboard();renderGroupList();renderTplList();updateNavCounts();
 
 // Then load from Firebase (authoritative source)
 fbLoadAll().then(function(){
@@ -3806,7 +4057,7 @@ fbLoadAll().then(function(){
   // Now enable Firebase sync for future user actions
   _suppressFbSync = false;
   // Re-render with Firebase data
-  renderDashboard();renderContracts();renderGroupList();renderTplList();
+  renderDashboard();renderContracts();renderGroupList();renderTplList();updateNavCounts();
   console.log('Rendered with Firebase data');
 }).catch(function(e){
   console.warn('Firebase unavailable, using localStorage only:', e);
