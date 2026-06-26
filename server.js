@@ -355,6 +355,21 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
   return { action: 'added', name: record.name, status: record.status, confidence: x.confidence };
 }
 
+// GET /api/claude/test — test Claude API key
+app.get('/api/claude/test', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.json({ ok: false, error: 'ANTHROPIC_API_KEY not set' });
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key': apiKey, 'anthropic-version':'2023-06-01' },
+      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:20, messages:[{role:'user',content:'Reply with OK only.'}] })
+    });
+    const data = await r.json();
+    res.json({ httpStatus: r.status, data });
+  } catch(e) { res.json({ ok:false, error: e.message }); }
+});
+
 // GET /api/drive/debug — diagnose Drive access
 app.get('/api/drive/debug', async (req, res) => {
   try {
