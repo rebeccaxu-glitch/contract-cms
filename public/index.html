@@ -1413,9 +1413,7 @@ function renderContracts(){
   var filtered=base;
   if(curBrandFilter)filtered=filtered.filter(function(c){return c.brand===curBrandFilter;});
   if(curEntityFilter){
-    var strictMatch=filtered.filter(function(c){return c.entity===curEntityFilter;});
-    // Fall back: show all brand-level contracts if none are assigned to this entity yet
-    filtered=strictMatch.length?strictMatch:filtered;
+    filtered=filtered.filter(function(c){return c.entity===curEntityFilter;});
   }
 
   var listEl=q('contracts-list');
