@@ -1448,9 +1448,9 @@ function renderContracts(){
   var brandNames={};
   BRANDS.forEach(function(b){brandNames[b.key]=b.name;});
 
-  var COL_GRID='2fr 1.4fr 1fr 90px 90px 110px 55px 100px 1.2fr 115px';
-  var COL_LABELS=['Name (File)','Counterparty','Contract Type','Effective Date','End Date','Value / Fees','Auto-Renew','Notice Period','Notes','Actions'];
-  var AI_COLS=[2,5,7,8];
+  var COL_GRID='2fr 1.4fr 1fr 90px 90px 110px 55px 100px 115px';
+  var COL_LABELS=['Name (File)','Counterparty','Contract Type','Effective Date','End Date','Value / Fees','Auto-Renew','Notice Period','Actions'];
+  var AI_COLS=[2,5,7];
 
   // Helper: build a contract row element
   function buildContractRow(c){
@@ -1507,13 +1507,6 @@ function renderContracts(){
     noticeEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'notice',id);};})(c.id);
     c8.appendChild(noticeSpan);c8.appendChild(noticeEdit);
 
-    var c9=document.createElement('div');c9.style.cssText='display:flex;align-items:center;gap:3px;min-width:0;';
-    var notesSpan=mk('span','',c.notes||'—');notesSpan.style.cssText='color:var(--text3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
-    if(c.notes)notesSpan.title=c.notes;
-    var notesEdit=mk('span','inline-edit-btn','✎');
-    notesEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'notes',id);};})(c.id);
-    c9.appendChild(notesSpan);c9.appendChild(notesEdit);
-
     var c10=document.createElement('div');c10.style.cssText='display:flex;gap:3px;justify-content:flex-end;';
     var latestFile=null;
     if(c.versions&&c.versions.length){
@@ -1532,7 +1525,7 @@ function renderContracts(){
     row.onmouseover=function(){this.style.background='var(--al)';this.querySelectorAll('.inline-edit-btn').forEach(function(b){b.style.opacity='1';});};
     row.onmouseout=function(){this.style.background='';this.querySelectorAll('.inline-edit-btn').forEach(function(b){b.style.opacity='0';});};
 
-    [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10].forEach(function(col){row.appendChild(col);});
+    [c1,c2,c3,c4,c5,c6,c7,c8,c10].forEach(function(col){row.appendChild(col);});
     return row;
   }
 
