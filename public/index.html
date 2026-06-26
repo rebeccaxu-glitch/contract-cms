@@ -196,13 +196,49 @@ textarea.form-input{resize:vertical;}
 .ai-badge-sm{font-size:9px;padding:1px 4px;border-radius:6px;background:var(--bl);color:var(--blue);margin-left:3px;vertical-align:middle;}
 .inline-edit-btn{opacity:0;font-size:10px;color:var(--text3);cursor:pointer;padding:1px 4px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);flex-shrink:0;line-height:1.2;}
 .contract-row:hover .inline-edit-btn{opacity:1;}
+/* ── Auth / Login ──────────────────────────────────── */
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0;}
+#login-screen.hidden{display:none;}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:48px 56px;display:flex;flex-direction:column;align-items:center;gap:20px;box-shadow:0 8px 40px rgba(0,0,0,.08);min-width:340px;}
+.login-logo{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+.login-logo-tag{background:var(--accent);color:#fff;font-size:13px;font-weight:800;padding:4px 10px;border-radius:8px;letter-spacing:.5px;}
+.login-logo-name{font-size:20px;font-weight:700;color:var(--text);}
+.login-subtitle{font-size:13px;color:var(--text3);margin-top:-8px;}
+.login-error{font-size:12px;color:var(--red);background:var(--rl);padding:8px 14px;border-radius:8px;text-align:center;display:none;}
+.login-error.visible{display:block;}
+.btn-google{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:12px 22px;font-size:14px;font-weight:600;color:#3c4043;cursor:pointer;transition:box-shadow .15s,border-color .15s;width:100%;justify-content:center;}
+.btn-google:hover{box-shadow:0 2px 12px rgba(0,0,0,.12);border-color:#aaa;}
+.btn-google svg{flex-shrink:0;}
+/* User badge in topbar */
+.user-badge{display:flex;align-items:center;gap:7px;padding:4px 10px 4px 4px;border-radius:20px;background:var(--surface2);border:1px solid var(--border);cursor:default;}
+.user-avatar{width:26px;height:26px;border-radius:50%;object-fit:cover;}
+.user-avatar-initials{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.user-name{font-size:12px;font-weight:500;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.btn-signout{font-size:11px;color:var(--text3);cursor:pointer;padding:2px 6px;border-radius:5px;border:1px solid var(--border);background:none;line-height:1.4;}
+.btn-signout:hover{color:var(--red);border-color:var(--red);}
 </style>
 <!-- Firebase SDKs loaded directly for reliability -->
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 </head>
 <body>
+<!-- ── Login Screen ───────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-tag">CMS</div>
+      <div class="login-logo-name">Contracts</div>
+    </div>
+    <div class="login-subtitle">Sign in to access the contract management system</div>
+    <div class="login-error" id="login-error"></div>
+    <button class="btn-google" onclick="signInWithGoogle()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 6.294C4.672 4.169 6.656 3.58 9 3.58z"/></svg>
+      Sign in with Google
+    </button>
+  </div>
+</div>
 <aside class="sidebar">
   <div class="logo"><div class="logo-tag">CMS</div><div class="logo-name">Contracts</div></div>
   <nav class="nav" style="flex:1;overflow-y:auto;padding-bottom:8px;">
@@ -245,6 +281,12 @@ textarea.form-input{resize:vertical;}
       <input type="file" id="importJSONInput" accept=".json" style="display:none" onchange="importJSON(this)">
       <button class="btn btn-ghost" onclick="exportExcel()">⬇ Excel</button>
       <button class="btn btn-primary" onclick="navTo('upload')">＋ Upload Contract</button>
+      <div class="user-badge" id="user-badge" style="display:none;">
+        <div class="user-avatar-initials" id="user-initials"></div>
+        <img class="user-avatar" id="user-avatar-img" style="display:none;" alt="">
+        <span class="user-name" id="user-name-label"></span>
+        <button class="btn-signout" onclick="signOutUser()" title="Sign out">↪</button>
+      </div>
     </div>
   </div>
   <div class="content">
@@ -4637,34 +4679,121 @@ function saveStepProgress(){
 }
 
 
-// Suppress Firebase sync during initial load to prevent overwriting cloud data
-_suppressFbSync = true;
+// ═══════════════════════════════════════════════════════
+//  AUTH LAYER — Firebase Google Sign-in
+// ═══════════════════════════════════════════════════════
 
-// Load from localStorage first (instant display)
-C=load(SK.C,[]);E=load(SK.E,DEF_E);T=load(SK.T,DEF_T);TL=loadTl();
-M=load(SK.M,{nextGId:10,nextEId:20,nextCId:30,nextFId:10,nextTId:20});
-migrateTplFolders(); // auto-associate legacy folders with entities
-setView('all');
-renderDashboard();renderGroupList();renderTplList();updateNavCounts();
+var ALLOWED_EMAILS = [
+  'rebeccaxu@techntea.com',
+  'sherry@techntea.com'
+];
 
-// Then load from Firebase (authoritative source)
-fbLoadAll().then(function(){
-  // Save Firebase data to localStorage as cache (without triggering Firebase sync)
-  try{ localStorage.setItem(SK.C, JSON.stringify(C)); }catch(e){}
-  try{ localStorage.setItem(SK.E, JSON.stringify(E)); }catch(e){}
-  try{ localStorage.setItem(SK.T, JSON.stringify(T)); }catch(e){}
-  try{ localStorage.setItem(SK.M, JSON.stringify(M)); }catch(e){}
-  // Now enable Firebase sync for future user actions
-  _suppressFbSync = false;
-  migrateTplFolders(); // re-run after Firebase data is loaded
-  // Re-render with Firebase data
-  renderDashboard();renderContracts();renderGroupList();renderTplList();updateNavCounts();
-  console.log('Rendered with Firebase data');
-}).catch(function(e){
-  console.warn('Firebase unavailable, using localStorage only:', e);
-  // Enable sync so user actions still try to save
-  _suppressFbSync = false;
-});
+var _appStarted = false;
+
+function showLoginScreen(errMsg){
+  var ls = document.getElementById('login-screen');
+  if(ls) ls.classList.remove('hidden');
+  var errEl = document.getElementById('login-error');
+  if(errEl){
+    if(errMsg){ errEl.textContent = errMsg; errEl.classList.add('visible'); }
+    else { errEl.classList.remove('visible'); }
+  }
+}
+
+function hideLoginScreen(){
+  var ls = document.getElementById('login-screen');
+  if(ls) ls.classList.add('hidden');
+}
+
+function updateUserBadge(user){
+  var badge = document.getElementById('user-badge');
+  var nameEl = document.getElementById('user-name-label');
+  var initEl = document.getElementById('user-initials');
+  var imgEl  = document.getElementById('user-avatar-img');
+  if(!badge) return;
+  if(!user){ badge.style.display='none'; return; }
+  badge.style.display = 'flex';
+  var firstName = (user.displayName||user.email).split(/[\s@]/)[0];
+  if(nameEl) nameEl.textContent = firstName;
+  if(user.photoURL && imgEl && initEl){
+    imgEl.src = user.photoURL; imgEl.style.display='block'; initEl.style.display='none';
+  } else if(initEl){
+    initEl.textContent = firstName.charAt(0).toUpperCase(); initEl.style.display='flex'; if(imgEl) imgEl.style.display='none';
+  }
+}
+
+function signInWithGoogle(){
+  var errEl = document.getElementById('login-error');
+  if(errEl) errEl.classList.remove('visible');
+  var provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).catch(function(err){
+    showLoginScreen('Sign-in failed: ' + (err.message||err.code));
+  });
+}
+
+function signOutUser(){
+  if(!confirm('Sign out?')) return;
+  firebase.auth().signOut().then(function(){
+    updateUserBadge(null);
+    showLoginScreen();
+  });
+}
+
+function startApp(){
+  if(_appStarted) return;
+  _appStarted = true;
+  // Suppress Firebase sync during initial load to prevent overwriting cloud data
+  _suppressFbSync = true;
+  // Load from localStorage first (instant display)
+  C=load(SK.C,[]);E=load(SK.E,DEF_E);T=load(SK.T,DEF_T);TL=loadTl();
+  M=load(SK.M,{nextGId:10,nextEId:20,nextCId:30,nextFId:10,nextTId:20});
+  migrateTplFolders();
+  setView('all');
+  renderDashboard();renderGroupList();renderTplList();updateNavCounts();
+  // Then load from Firebase (authoritative source)
+  fbLoadAll().then(function(){
+    try{ localStorage.setItem(SK.C, JSON.stringify(C)); }catch(e){}
+    try{ localStorage.setItem(SK.E, JSON.stringify(E)); }catch(e){}
+    try{ localStorage.setItem(SK.T, JSON.stringify(T)); }catch(e){}
+    try{ localStorage.setItem(SK.M, JSON.stringify(M)); }catch(e){}
+    _suppressFbSync = false;
+    migrateTplFolders();
+    renderDashboard();renderContracts();renderGroupList();renderTplList();updateNavCounts();
+    console.log('Rendered with Firebase data');
+  }).catch(function(e){
+    console.warn('Firebase unavailable, using localStorage only:', e);
+    _suppressFbSync = false;
+  });
+}
+
+// Initialise auth and listen for state changes
+(function initAuth(){
+  try {
+    var fbAuth;
+    try { fbAuth = firebase.auth(); }
+    catch(e){ firebase.initializeApp(FB_CONFIG); fbAuth = firebase.auth(); }
+
+    fbAuth.onAuthStateChanged(function(user){
+      if(user){
+        if(ALLOWED_EMAILS.indexOf(user.email) === -1){
+          fbAuth.signOut();
+          showLoginScreen('Access denied: ' + user.email + ' is not authorised to access this system.');
+          return;
+        }
+        updateUserBadge(user);
+        hideLoginScreen();
+        startApp();
+      } else {
+        updateUserBadge(null);
+        showLoginScreen();
+      }
+    });
+  } catch(e){
+    console.error('Auth init failed:', e);
+    // Fallback: show login screen
+    showLoginScreen('Auth system failed to load. Please refresh the page.');
+  }
+})();
 
 // Load mammoth async (for docx extraction)
 (function(){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';document.head.appendChild(s);})();
