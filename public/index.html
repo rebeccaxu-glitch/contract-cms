@@ -1034,15 +1034,32 @@ function renderBrandTree(){
 
   BRANDS.forEach(function(brand){
     var brandCount=C.filter(function(c){return c.brand===brand.key;}).length;
-    // Default: collapsed (true = collapsed); user can expand
-    var isOpen=collapsedBrands[brand.key]===true; // true means OPEN
+    var isOpen=!!collapsedBrands[brand.key]; // true = open
 
+    // Entity list
+    var entWrap=document.createElement('div');
+    entWrap.className='entity-list-wrap';
+    if(isOpen)entWrap.style.display='block';
+
+    brand.entities.forEach(function(ent){
+      var eRow=document.createElement('div');
+      eRow.className='entity-row'+(curEntityFilter===ent.name&&curBrandFilter===brand.key?' active':'');
+      var ec=C.filter(function(c){return c.brand===brand.key&&c.entity===ent.name;}).length;
+      eRow.innerHTML='<span style="font-size:11px;flex-shrink:0;">'+ent.flag+'</span>'
+        +'<span class="entity-name-txt">'+ent.name+'</span>'
+        +(ec?'<span class="brand-cnt">'+ec+'</span>':'');
+      eRow.onclick=(function(bk,en){return function(e){
+        e.stopPropagation();selectEntity(bk,en);
+      };})(brand.key,ent.name);
+      entWrap.appendChild(eRow);
+    });
+
+    // Brand row — chevron toggles open/close; clicking brand name also selects
     var bRow=document.createElement('div');
     bRow.className='brand-row'+(curBrandFilter===brand.key&&!curEntityFilter?' active':'');
 
     var chev=document.createElement('span');
     chev.className='brand-chevron';
-    chev.style.cssText='cursor:pointer;padding:2px 4px;border-radius:3px;flex-shrink:0;';
     chev.textContent=isOpen?'▾':'▸';
 
     var dot=document.createElement('span');
@@ -1050,63 +1067,36 @@ function renderBrandTree(){
     dot.style.background=brand.color;
 
     var lbl=document.createElement('span');
-    lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;';
+    lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     lbl.textContent=brand.name;
 
     var cnt=document.createElement('span');
     cnt.className='brand-cnt';
     cnt.textContent=brandCount||'';
 
-    // Entity list (starts collapsed by default)
-    var entWrap=document.createElement('div');
-    entWrap.className='entity-list-wrap'+(isOpen?' open':'');
-
-    brand.entities.forEach(function(ent){
-      var eRow=document.createElement('div');
-      eRow.className='entity-row'+(curEntityFilter===ent.name&&curBrandFilter===brand.key?' active':'');
-      eRow.innerHTML='<span style="font-size:11px;flex-shrink:0;">'+ent.flag+'</span><span class="entity-name-txt">'+ent.name+'</span>';
-      var ec=C.filter(function(c){return c.brand===brand.key&&c.entity===ent.name;}).length;
-      if(ec){var es=document.createElement('span');es.className='brand-cnt';es.textContent=ec;eRow.appendChild(es);}
-      eRow.onclick=(function(bk,en){return function(e){e.stopPropagation();selectEntity(bk,en);};})(brand.key,ent.name);
-      entWrap.appendChild(eRow);
-    });
-
-    // Chevron: toggle only (no filter change)
-    chev.onclick=(function(bk,ew,ch){return function(e){
-      e.stopPropagation();
-      var nowOpen=ew.classList.toggle('open');
-      ch.textContent=nowOpen?'▾':'▸';
-      collapsedBrands[bk]=nowOpen;
-    };})(brand.key,entWrap,chev);
-
-    // Label: select brand + expand if collapsed
-    lbl.onclick=(function(bk,ew,ch){return function(e){
-      e.stopPropagation();
-      if(!ew.classList.contains('open')){
-        ew.classList.add('open');ch.textContent='▾';collapsedBrands[bk]=true;
-      }
-      selectBrand(bk);
-    };})(brand.key,entWrap,chev);
-
-    // Clicking the row itself (not chev/lbl) also selects
-    bRow.onclick=(function(bk,ew,ch){return function(){
-      if(!ew.classList.contains('open')){
-        ew.classList.add('open');ch.textContent='▾';collapsedBrands[bk]=true;
-      }
-      selectBrand(bk);
-    };})(brand.key,entWrap,chev);
-
     bRow.appendChild(chev);bRow.appendChild(dot);bRow.appendChild(lbl);bRow.appendChild(cnt);
-    bl.appendChild(bRow);bl.appendChild(entWrap);
+
+    // Single onclick: toggle open/close + select brand
+    bRow.onclick=(function(bk,ew,ch){return function(e){
+      e.stopPropagation();
+      var nowOpen=!collapsedBrands[bk];
+      collapsedBrands[bk]=nowOpen;
+      ew.style.display=nowOpen?'block':'none';
+      ch.textContent=nowOpen?'▾':'▸';
+      selectBrand(bk);
+    };})(brand.key,entWrap,chev);
+
+    bl.appendChild(bRow);
+    bl.appendChild(entWrap);
   });
 
-  // Manage brands button at bottom
+  // Manage button
   var mgBtn=document.createElement('div');
-  mgBtn.style.cssText='padding:8px 12px 4px 28px;cursor:pointer;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;';
-  mgBtn.innerHTML='<span>⚙</span><span>Manage brands & entities</span>';
+  mgBtn.style.cssText='padding:8px 12px 4px 28px;cursor:pointer;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;margin-top:4px;';
+  mgBtn.innerHTML='<span>⚙</span><span style="margin-left:4px;">Manage brands &amp; entities</span>';
   mgBtn.onmouseover=function(){this.style.color='var(--accent)';};
   mgBtn.onmouseout=function(){this.style.color='var(--text3)';};
-  mgBtn.onclick=function(){openBrandManager();};
+  mgBtn.onclick=function(e){e.stopPropagation();openBrandManager();};
   bl.appendChild(mgBtn);
 }
 
