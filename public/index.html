@@ -505,7 +505,14 @@ textarea.form-input{resize:vertical;}
   <div class="modal" style="width:640px">
     <div class="modal-title"><div style="display:flex;align-items:center;gap:10px"><span id="cd-name" style="font-size:15px"></span><span id="cd-status"></span></div><span class="modal-close" onclick="closeModal('modal-contract-detail')">×</span></div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px" id="cd-meta"></div>
-    <div id="cd-notes-wrap" style="display:none;margin-bottom:16px"><label class="form-label">备注</label><div style="background:var(--surface2);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--text2);line-height:1.6" id="cd-notes"></div></div>
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+        <label class="form-label" style="margin:0;">Notes</label>
+        <span id="cd-notes-edit-btn" style="font-size:11px;color:var(--accent);cursor:pointer;font-weight:500;">✎ Edit</span>
+      </div>
+      <div id="cd-notes-display" style="background:var(--surface2);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--text2);line-height:1.6;min-height:38px;cursor:pointer;"></div>
+      <textarea id="cd-notes-input" style="display:none;width:100%;background:var(--surface2);border:1px solid var(--accent);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--text);line-height:1.6;font-family:inherit;resize:vertical;min-height:70px;outline:none;box-sizing:border-box;" placeholder="Add notes…"></textarea>
+    </div>
     <!-- Approval progress (shown if contract has a flow) -->
     <div id="cd-approval-section" style="display:none;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -2167,9 +2174,38 @@ function openContractDetail(id){
   // Status badge (computed)
   var sb=q('cd-status');
   if(sb){sb.innerHTML='';var cs=getComputedStatus(c);var b=mk('span','badge '+(SB[cs]||'b-active'),SL[cs]||cs);sb.appendChild(b);}
-  // Notes
-  var nw=q('cd-notes-wrap');
-  if(c.notes){nw.style.display='block';setText('cd-notes',c.notes);}else{nw.style.display='none';}
+  // Notes — always visible, inline-editable
+  (function(cid,cNotes){
+    var disp=q('cd-notes-display');
+    var inp=q('cd-notes-input');
+    var editBtn=q('cd-notes-edit-btn');
+    if(!disp||!inp||!editBtn)return;
+    // Render display
+    function showDisplay(){
+      inp.style.display='none';disp.style.display='block';
+      editBtn.textContent='✎ Edit';
+      disp.style.color=cNotes?'var(--text2)':'var(--text3)';
+      disp.style.fontStyle=cNotes?'normal':'italic';
+      disp.textContent=cNotes||'No notes — click to add';
+    }
+    function showEditor(){
+      disp.style.display='none';inp.style.display='block';
+      inp.value=cNotes||'';editBtn.textContent='✔ Save';
+      inp.focus();
+    }
+    function saveNote(){
+      var v=inp.value.trim();
+      var ct2=C.find(function(x){return x.id===cid;});
+      if(ct2){ct2.notes=v;cNotes=v;save(SK.C,C);fbSaveAll();}
+      showDisplay();
+    }
+    showDisplay();
+    editBtn.onclick=function(){
+      if(inp.style.display==='none'){showEditor();}else{saveNote();}
+    };
+    disp.onclick=function(){showEditor();};
+    inp.onkeydown=function(ev){if(ev.key==='Escape')showDisplay();};
+  })(id, c.notes||'');
   // Edit button
   var eb=q('cd-edit-btn');
   if(eb)eb.onclick=function(){closeModal('modal-contract-detail');openContractForm(id);};
