@@ -147,6 +147,27 @@ textarea.form-input{resize:vertical;}
 .cal-day.today{color:var(--accent);font-weight:700;background:var(--al);}
 .cal-day.has-event::after{content:'';position:absolute;bottom:2px;width:4px;height:4px;border-radius:50%;background:var(--red);}
 .section-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;padding-bottom:8px;border-top:none;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+/* ── Brand tree ────────────────────────────────────── */
+.brand-tree-header{padding:10px 12px 4px;font-size:10px;letter-spacing:2px;color:var(--text3);font-weight:600;text-transform:uppercase;flex-shrink:0;}
+.brand-all-row{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;margin:0 0 2px;}
+.brand-all-row:hover{background:var(--surface2);color:var(--text);}
+.brand-all-row.active{background:var(--al);color:var(--accent);font-weight:600;border-left-color:var(--accent);}
+.brand-row{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;font-weight:500;color:var(--text);cursor:pointer;border-left:2px solid transparent;user-select:none;}
+.brand-row:hover{background:var(--surface2);}
+.brand-row.active{background:var(--al);border-left-color:var(--accent);}
+.brand-chevron{font-size:10px;color:var(--text3);transition:transform .15s;flex-shrink:0;width:10px;display:inline-block;}
+.brand-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.brand-cnt{margin-left:auto;font-size:10px;color:var(--text3);flex-shrink:0;}
+.entity-list-wrap{display:none;}
+.entity-list-wrap.open{display:block;}
+.entity-row{display:flex;align-items:center;gap:5px;padding:4px 10px 4px 26px;font-size:11px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;}
+.entity-row:hover{background:var(--surface2);color:var(--text);}
+.entity-row.active{background:var(--al);color:var(--accent);font-weight:600;border-left-color:var(--accent);}
+.entity-name-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+/* ── AI badge inline ──────────────────────────────── */
+.ai-badge-sm{font-size:9px;padding:1px 4px;border-radius:6px;background:var(--bl);color:var(--blue);margin-left:3px;vertical-align:middle;}
+.inline-edit-btn{opacity:0;font-size:10px;color:var(--text3);cursor:pointer;padding:1px 4px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);flex-shrink:0;line-height:1.2;}
+.contract-row:hover .inline-edit-btn{opacity:1;}
 </style>
 <!-- Firebase SDKs loaded directly for reliability -->
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
@@ -155,19 +176,23 @@ textarea.form-input{resize:vertical;}
 </head>
 <body>
 <aside class="sidebar">
-  <div class="logo"><div class="logo-tag">CMS</div><div class="logo-name">合同管理</div></div>
-  <nav class="nav">
-    <div class="nav-section">主菜单</div>
-    <div class="nav-item active" data-page="dashboard"><span class="ni">📊</span>控制台</div>
-    <div class="nav-item" data-page="contracts"><span class="ni">📄</span>合同列表</div>
-    <div class="nav-item" data-page="upload"><span class="ni">⬆</span>上传合同</div>
-    <div class="nav-item" data-page="entities"><span class="ni">🏢</span>公司主体</div>
-    <div class="nav-item" data-page="templates"><span class="ni">📁</span>合同模板</div>
-    <div class="nav-section">跟踪</div>
-    <div class="nav-item" data-page="timeline"><span class="ni">🔄</span>审批流程</div>
-    <div class="nav-item" data-page="calendar"><span class="ni">📅</span>到期日历<span class="nav-badge" id="badge-expiring"></span></div>
-    <div class="nav-item" data-page="alerts"><span class="ni">🔔</span>提醒管理<span class="nav-badge" id="badge-urgent"></span></div>
+  <div class="logo"><div class="logo-tag">CMS</div><div class="logo-name">Contracts</div></div>
+  <nav class="nav" style="flex-shrink:0;padding-bottom:0;">
+    <div class="nav-item active" data-page="contracts"><span class="ni">📄</span>Contract List</div>
+    <div class="nav-item" data-page="templates"><span class="ni">📁</span>Templates</div>
+    <div class="nav-item" data-page="calendar"><span class="ni">📅</span>Expiry Calendar<span class="nav-badge" id="badge-expiring"></span></div>
+    <div class="nav-item" data-page="alerts"><span class="ni">🔔</span>Reminders<span class="nav-badge" id="badge-urgent"></span></div>
   </nav>
+  <!-- Brand tree — shown when Contract List is active -->
+  <div id="brand-tree" style="flex:1;overflow-y:auto;border-top:1px solid var(--border);display:flex;flex-direction:column;">
+    <div class="brand-tree-header">BRANDS</div>
+    <div class="brand-all-row active" id="brand-all-row" onclick="selectBrandAll()">
+      <span style="font-size:12px;color:var(--text3);">◻</span>
+      <span style="flex:1;">All contracts</span>
+      <span class="brand-cnt" id="brand-all-count">0</span>
+    </div>
+    <div id="brand-list"></div>
+  </div>
   <div class="sidebar-footer">
     <div class="user-card">
       <div class="avatar">R</div>
@@ -211,14 +236,12 @@ textarea.form-input{resize:vertical;}
       <div class="table-wrap">
         <div class="table-head">
           <div class="filter-tabs">
-            <div class="ftab active" data-filter="all">全部 <span id="cnt-all"></span></div>
-            <div class="ftab" data-filter="reviewing">审核中 <span id="cnt-reviewing"></span></div>
-            <div class="ftab" data-filter="signing">签署中 <span id="cnt-signing"></span></div>
-            <div class="ftab" data-filter="active">执行中 <span id="cnt-active"></span></div>
-            <div class="ftab" data-filter="expiring">即将到期 <span id="cnt-expiring"></span></div>
-            <div class="ftab" data-filter="expired">已到期 <span id="cnt-expired"></span></div>
+            <div class="ftab active" data-filter="all">All <span id="cnt-all"></span></div>
+            <div class="ftab" data-filter="active">Active <span id="cnt-active"></span></div>
+            <div class="ftab" data-filter="expiring">Expiring Soon <span id="cnt-expiring"></span></div>
+            <div class="ftab" data-filter="expired">Expired <span id="cnt-expired"></span></div>
           </div>
-          <button class="btn btn-primary" style="margin-left:auto;font-size:12px" onclick="openContractForm(null)">＋ 手动添加</button>
+          <button class="btn btn-primary" style="margin-left:auto;font-size:12px" onclick="openContractForm(null)">＋ Add contract</button>
         </div>
         <div id="contracts-list"></div>
         <div id="contracts-empty" style="display:none;text-align:center;padding:48px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">📄</div>暂无合同记录</div>
@@ -251,26 +274,42 @@ textarea.form-input{resize:vertical;}
             <span style="background:var(--al);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600">已识别</span>
           </div>
           <div class="form-grid">
-            <div class="fg-full"><label class="form-label">合同名称 * <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-name" type="text"></div>
-            <div><label class="form-label">合同编号</label><input class="form-input" id="f-id" type="text"></div>
-            <div><label class="form-label">合同类型 <span style="color:var(--accent);font-size:10px">● AI识别</span></label>
-              <select class="form-input" id="f-type"><option>服务协议</option><option>采购合同</option><option>保密协议（NDA）</option><option>劳动合同</option><option>合作协议</option><option>租赁合同</option><option>金融合同</option><option>数据协议</option><option>其他</option></select></div>
-            <div><label class="form-label">对方当事人 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-party" type="text"></div>
-            <div><label class="form-label">合同金额 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-amount" type="text" placeholder="如：SGD 50,000"></div>
-            <div><label class="form-label">适用法律 <span style="color:var(--accent);font-size:10px">● AI识别</span></label>
-              <select class="form-input" id="f-law"><option>新加坡法律</option><option>中华人民共和国法律</option><option>英国法律</option><option>其他</option></select></div>
-            <div><label class="form-label">签署日期 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-start" type="date" oninput="updateUploadId()"></div>
-            <div><label class="form-label">到期日期 <span style="color:var(--accent);font-size:10px">● AI识别</span></label><input class="form-input" id="f-end" type="date"></div>
-            <div><label class="form-label">合同状态</label>
-              <select class="form-input" id="f-status"><option value="reviewing">审核中</option><option value="signing">签署中</option><option value="active">执行中</option><option value="expiring">即将到期</option><option value="expired">已到期</option></select></div>
-            <div><label class="form-label">所属公司</label>
-              <select class="form-input" id="f-company"></select></div>
-            <div><label class="form-label">是否最终签署版？</label>
+            <div class="fg-full"><label class="form-label">Contract Name * <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-name" type="text"></div>
+            <div><label class="form-label">Contract ID</label><input class="form-input" id="f-id" type="text"></div>
+            <div><label class="form-label">Contract Type <span class="ai-badge-sm">AI</span></label>
+              <input class="form-input" id="f-type" type="text" list="f-type-list" placeholder="Service Agreement / Lease / NDA…">
+              <datalist id="f-type-list"><option>Service Agreement</option><option>Lease</option><option>NDA</option><option>Employment</option><option>Purchase</option><option>Cooperation</option><option>Financial</option><option>Other</option><option>服务协议</option><option>租赁合同</option><option>保密协议</option></datalist>
+            </div>
+            <div><label class="form-label">Counterparty <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-party" type="text"></div>
+            <div><label class="form-label">Brand</label><select class="form-input" id="f-brand" onchange="updateUploadEntityOptions()">
+              <option value="">— Not specified —</option>
+              <option value="orbitlabs">Orbitlabs</option><option value="techntea">Techntea</option>
+              <option value="anzo">Anzo</option><option value="dlsm">DLSM</option>
+              <option value="ttg">TTG</option><option value="oqtima">Oqtima</option>
+              <option value="limeup">Lime Up</option><option value="paypaz">Paypaz</option>
+            </select></div>
+            <div><label class="form-label">Our Entity</label><select class="form-input" id="f-entity"><option value="">— Select brand first —</option></select></div>
+            <div><label class="form-label">Effective Date <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-start" type="date" oninput="updateUploadId()"></div>
+            <div><label class="form-label">End Date <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-end" type="date"></div>
+            <div><label class="form-label">Currency</label><select class="form-input" id="f-currency">
+              <option value="">—</option><option>SGD</option><option>USD</option><option>CNY</option><option>HKD</option><option>TWD</option><option>AUD</option><option>EUR</option><option>GBP</option><option>MYR</option>
+            </select></div>
+            <div><label class="form-label">Value / Fees <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-fees" type="text" placeholder="e.g. 50,000 / yr"></div>
+            <div><label class="form-label">Auto-Renewal <span class="ai-badge-sm">AI</span></label>
               <div class="final-toggle">
-                <div class="ftoggle-btn" id="ft-yes" onclick="setFinal(true)">✅ 是，最终签署版</div>
-                <div class="ftoggle-btn selected" id="ft-no" onclick="setFinal(false)">📝 否，历史版本</div>
+                <div class="ftoggle-btn" id="f-ar-yes" onclick="setUploadAutoRenewal(true)">✓ Yes</div>
+                <div class="ftoggle-btn selected" id="f-ar-no" onclick="setUploadAutoRenewal(false)">✗ No</div>
               </div></div>
-            <div class="fg-full"><label class="form-label">AI 摘要 <span style="color:var(--accent);font-size:10px">● AI生成</span></label><textarea class="form-input" id="f-notes" rows="3"></textarea></div>
+            <div style="display:flex;gap:8px;">
+              <div style="flex:1;"><label class="form-label">Notice Period <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-notice" type="number" min="0" placeholder="e.g. 30"></div>
+              <div style="width:90px;"><label class="form-label">Unit</label><select class="form-input" id="f-notice-unit"><option value="days">days</option><option value="months">months</option><option value="years">years</option></select></div>
+            </div>
+            <div><label class="form-label">Is this the signed final version?</label>
+              <div class="final-toggle">
+                <div class="ftoggle-btn" id="ft-yes" onclick="setFinal(true)">✅ Yes, final signed</div>
+                <div class="ftoggle-btn selected" id="ft-no" onclick="setFinal(false)">📝 No, draft/history</div>
+              </div></div>
+            <div class="fg-full"><label class="form-label">Notes / Summary <span class="ai-badge-sm">AI</span></label><textarea class="form-input" id="f-notes" rows="3"></textarea></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:18px">
             <button class="btn btn-ghost" onclick="resetUpload()">← 重新上传</button>
@@ -446,21 +485,49 @@ textarea.form-input{resize:vertical;}
   </div>
 </div>
 <div class="overlay" id="modal-contract-form">
-  <div class="modal">
-    <div class="modal-title"><span id="cf-title">添加合同</span><span class="modal-close" onclick="closeModal('modal-contract-form')">×</span></div>
+  <div class="modal" style="width:620px">
+    <div class="modal-title"><span id="cf-title">Add contract</span><span class="modal-close" onclick="closeModal('modal-contract-form')">×</span></div>
     <div class="form-grid">
-      <div class="fg-full"><label class="form-label">合同名称 *</label><input class="form-input" id="cf-name" type="text"></div>
-      <div><label class="form-label">合同编号</label><input class="form-input" id="cf-id" type="text"></div>
-      <div><label class="form-label">合同类型</label><select class="form-input" id="cf-type"><option>服务协议</option><option>采购合同</option><option>保密协议（NDA）</option><option>劳动合同</option><option>合作协议</option><option>租赁合同</option><option>金融合同</option><option>数据协议</option><option>其他</option></select></div>
-      <div><label class="form-label">对方当事人 *</label><input class="form-input" id="cf-party" type="text"></div>
-      <div><label class="form-label">合同金额</label><input class="form-input" id="cf-amount" type="text" placeholder="如：SGD 50,000"></div>
-      <div><label class="form-label">状态</label><select class="form-input" id="cf-status"><option value="reviewing">审核中</option><option value="signing">签署中</option><option value="active">执行中</option><option value="expiring">即将到期</option><option value="expired">已到期</option></select></div>
-      <div class="fg-full"><label class="form-label">所属公司</label><select class="form-input" id="cf-company"></select></div>
-      <div><label class="form-label">签署日期</label><input class="form-input" id="cf-start" type="date" oninput="updateCfId()"></div>
-      <div><label class="form-label">到期日期</label><input class="form-input" id="cf-end" type="date"></div>
-      <div class="fg-full"><label class="form-label">备注</label><textarea class="form-input" id="cf-notes" rows="2"></textarea></div>
+      <div class="fg-full"><label class="form-label">Contract Name *</label><input class="form-input" id="cf-name" type="text"></div>
+      <div><label class="form-label">Contract ID</label><input class="form-input" id="cf-id" type="text"></div>
+      <div><label class="form-label">Contract Type <span class="ai-badge-sm">AI</span></label>
+        <input class="form-input" id="cf-type" type="text" list="cf-type-list" placeholder="Service Agreement / Lease / NDA…">
+        <datalist id="cf-type-list"><option>Service Agreement</option><option>Lease</option><option>NDA</option><option>Employment</option><option>Purchase</option><option>Cooperation</option><option>Financial</option><option>Data Processing</option><option>Other</option><option>服务协议</option><option>租赁合同</option><option>保密协议</option><option>劳动合同</option><option>采购合同</option><option>合作协议</option></datalist>
+      </div>
+      <div><label class="form-label">Counterparty *</label><input class="form-input" id="cf-party" type="text"></div>
+      <div><label class="form-label">Brand</label><select class="form-input" id="cf-brand" onchange="updateEntityOptions()">
+        <option value="">— Not specified —</option>
+        <option value="orbitlabs">Orbitlabs</option>
+        <option value="techntea">Techntea</option>
+        <option value="anzo">Anzo</option>
+        <option value="dlsm">DLSM</option>
+        <option value="ttg">TTG</option>
+        <option value="oqtima">Oqtima</option>
+        <option value="limeup">Lime Up</option>
+        <option value="paypaz">Paypaz</option>
+      </select></div>
+      <div><label class="form-label">Our Entity</label><select class="form-input" id="cf-entity">
+        <option value="">— Select brand first —</option>
+      </select></div>
+      <div><label class="form-label">Effective Date</label><input class="form-input" id="cf-start" type="date" oninput="updateCfId()"></div>
+      <div><label class="form-label">End Date</label><input class="form-input" id="cf-end" type="date"></div>
+      <div><label class="form-label">Currency</label><select class="form-input" id="cf-currency">
+        <option value="">—</option><option>SGD</option><option>USD</option><option>CNY</option><option>HKD</option><option>TWD</option><option>AUD</option><option>EUR</option><option>GBP</option><option>MYR</option>
+      </select></div>
+      <div><label class="form-label">Contract Value / Fees <span class="ai-badge-sm">AI</span></label><input class="form-input" id="cf-fees" type="text" placeholder="e.g. 50,000 / yr"></div>
+      <div><label class="form-label">Auto-Renewal</label>
+        <div class="final-toggle">
+          <div class="ftoggle-btn" id="cf-ar-yes" onclick="setCfAutoRenewal(true)">✓ Yes</div>
+          <div class="ftoggle-btn selected" id="cf-ar-no" onclick="setCfAutoRenewal(false)">✗ No</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;"><label class="form-label">Notice Period <span class="ai-badge-sm">AI</span></label><input class="form-input" id="cf-notice" type="number" min="0" placeholder="e.g. 30"></div>
+        <div style="width:90px;"><label class="form-label">Unit</label><select class="form-input" id="cf-notice-unit"><option value="days">days</option><option value="months">months</option><option value="years">years</option></select></div>
+      </div>
+      <div class="fg-full"><label class="form-label">Notes <span class="ai-badge-sm">AI</span></label><textarea class="form-input" id="cf-notes" rows="2"></textarea></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-contract-form')">取消</button><button class="btn btn-primary" onclick="saveContract()">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-contract-form')">Cancel</button><button class="btn btn-primary" onclick="saveContract()">Save</button></div>
   </div>
 </div>
 <div class="overlay" id="modal-version-form">
@@ -804,10 +871,66 @@ var DEF_T = [
   {id:2,name:'上海XYZ科技',icon:'🌏',desc:'中国区模板',files:[{id:1,name:'采购框架协议',type:'采购合同',lang:'中文',ver:'v1.0',note:'',added:'2026-03-01'}]}
 ];
 
+// ── Brand / Entity hierarchy (hardcoded) ──────────────
+var BRANDS = [
+  {key:'orbitlabs', name:'Orbitlabs', color:'#1d9e75', entities:[
+    {flag:'🇸🇬', name:'Orbitlabs Pte. Ltd.'},
+    {flag:'🇨🇳', name:'深圳市星轨实验科技有限公司'},
+    {flag:'🇹🇼', name:'星應有限公司'},
+    {flag:'🇦🇺', name:'Orbitlabs Services Aust'}
+  ]},
+  {key:'techntea', name:'Techntea', color:'#378add', entities:[
+    {flag:'🇸🇬', name:'Techntea Pte.Ltd'}
+  ]},
+  {key:'anzo', name:'Anzo', color:'#d85a30', entities:[
+    {flag:'🇭🇰', name:'Anzo Holding Limited'},
+    {flag:'🇲🇺', name:'Anzo Capital (Int.) Pty Ltd'},
+    {flag:'🇦🇺', name:'Anzo Capital (Aust) Pty Ltd'},
+    {flag:'🏳️', name:'Anzo Capital (SVG) LLC'},
+    {flag:'🇻🇺', name:'ANZO CAPITAL GLOBAL LIMITED'},
+    {flag:'🇳🇬', name:'ANZOCAP NIGERIA LIMITED'},
+    {flag:'🇧🇿', name:'ANZO CAPITAL LIMITED_BZ'},
+    {flag:'🇰🇪', name:'ANZO CAPITAL LIMITED_KE'}
+  ]},
+  {key:'dlsm', name:'DLSM', color:'#7f77dd', entities:[
+    {flag:'🇻🇺', name:'DLS Markets Limited'},
+    {flag:'🇰🇾', name:'DLS Markets (International) Pty Ltd'},
+    {flag:'🇦🇺', name:'DLS Markets (Aust) Pty Ltd'},
+    {flag:'🇲🇾', name:'Long Leading Services Sdn. Bhd.'},
+    {flag:'🇦🇺', name:'LONG LEADING SERVICES PTY LTD'}
+  ]},
+  {key:'ttg', name:'TTG', color:'#ba7517', entities:[
+    {flag:'🇻🇬', name:'ThreeTrader Limited'},
+    {flag:'🇲🇺', name:'ThreeTrader Global (MU) Pty Ltd'},
+    {flag:'🇻🇺', name:'ThreeTrader Global Limited'},
+    {flag:'🇸🇬', name:'TTG HOLDING (SG) Pte. Ltd.'},
+    {flag:'🇦🇺', name:'TTG AU PTY LTD'},
+    {flag:'🇻🇺', name:'THREETRADER (V) LIMITED'},
+    {flag:'🇹🇼', name:'Lian Mei Global Company Limited'}
+  ]},
+  {key:'oqtima', name:'Oqtima', color:'#d4537e', entities:[
+    {flag:'🇸🇨', name:'Oqtima Int. Ltd'},
+    {flag:'🇨🇾', name:'Ipso Facto Ltd'},
+    {flag:'🇨🇾', name:'AD Maiora Holding Limited'},
+    {flag:'🇭🇰', name:'OQTIMA GLOBAL LIMITED'},
+    {flag:'🇨🇾', name:'PLATICA SERVICES LIMITED'}
+  ]},
+  {key:'limeup', name:'Lime Up', color:'#639922', entities:[
+    {flag:'🇸🇬', name:'Next Mango Pte. Ltd'},
+    {flag:'🌐', name:'Lime Up Services'}
+  ]},
+  {key:'paypaz', name:'Paypaz', color:'#534ab7', entities:[
+    {flag:'🇸🇬', name:'Magic Papaya Pte. Ltd.'}
+  ]}
+];
+
 // ── State ──────────────────────────────────────────────
 var C, E, T, M;
 var curFilter   = 'all';
-var collapsedGroups = {}; // tracks collapsed state per company group key
+var curBrandFilter  = null; // null = all brands
+var curEntityFilter = null; // null = all entities within brand
+var collapsedBrands = {}; // tracks open/closed state of brand rows in sidebar
+var collapsedGroups = {}; // tracks collapsed state per contract group
 var editCid     = null;
 var curGrpId    = null;
 var curCoId     = null;
@@ -882,7 +1005,7 @@ function genId(dateStr){
 }
 
 // ── Navigation ──────────────────────────────────────────
-var PAGE_TITLES = {dashboard:'控制台',contracts:'合同列表',upload:'上传合同',entities:'公司主体',templates:'合同模板',timeline:'审批流程',calendar:'到期日历',alerts:'提醒管理'};
+var PAGE_TITLES = {contracts:'Contract List',upload:'Upload Contract',entities:'Entities',templates:'Templates',timeline:'Approval Flow',calendar:'Expiry Calendar',alerts:'Reminders'};
 function navTo(pid){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var pg=q('page-'+pid);if(!pg)return;
@@ -891,13 +1014,159 @@ function navTo(pid){
   document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
   var ni=document.querySelector('[data-page="'+pid+'"]');
   if(ni)ni.classList.add('active');
-  if(pid==='dashboard')renderDashboard();
-  if(pid==='contracts')renderContracts();
+  // Show/hide brand tree
+  var bt=q('brand-tree');
+  if(bt)bt.style.display=(pid==='contracts'?'flex':'none');
+  if(pid==='contracts'){renderBrandTree();renderContracts();}
   if(pid==='entities')renderGroupList();
   if(pid==='templates')renderTplList();
   if(pid==='alerts')renderAlerts();
   if(pid==='timeline')renderTimeline();
   if(pid==='calendar')renderCalendar();
+}
+
+// ── Brand tree sidebar ──────────────────────────────────
+function renderBrandTree(){
+  var bl=q('brand-list');if(!bl)return;
+  bl.innerHTML='';
+  // Update "All contracts" count
+  var ac=q('brand-all-count');if(ac)ac.textContent=C.length;
+
+  BRANDS.forEach(function(brand){
+    var brandCount=C.filter(function(c){return c.brand===brand.key;}).length;
+    var isOpen=collapsedBrands[brand.key]!==false; // default open = depends on selection
+
+    // Brand row
+    var bRow=document.createElement('div');
+    bRow.className='brand-row'+(curBrandFilter===brand.key&&!curEntityFilter?' active':'');
+
+    var chev=document.createElement('span');
+    chev.className='brand-chevron';
+    chev.textContent=isOpen?'▾':'▸';
+
+    var dot=document.createElement('span');
+    dot.className='brand-dot';
+    dot.style.background=brand.color;
+
+    var lbl=document.createElement('span');
+    lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    lbl.textContent=brand.name;
+
+    var cnt=document.createElement('span');
+    cnt.className='brand-cnt';
+    cnt.textContent=brandCount||'';
+
+    bRow.appendChild(chev);bRow.appendChild(dot);bRow.appendChild(lbl);bRow.appendChild(cnt);
+    bRow.onclick=(function(b,c,l){return function(e){
+      // Toggle expand/collapse on chevron click; select brand on label click
+      collapsedBrands[b.key]=!c.classList.contains('open');
+      c.classList.toggle('open');
+      l.textContent=c.classList.contains('open')?'▾':'▸';
+      selectBrand(b.key);
+    };})(brand,entWrap,chev);
+
+    // Entity list
+    var entWrap=document.createElement('div');
+    entWrap.className='entity-list-wrap'+(isOpen?' open':'');
+
+    brand.entities.forEach(function(ent){
+      var eRow=document.createElement('div');
+      eRow.className='entity-row'+(curEntityFilter===ent.name&&curBrandFilter===brand.key?' active':'');
+      eRow.innerHTML='<span style="font-size:11px;flex-shrink:0;">'+ent.flag+'</span><span class="entity-name-txt">'+ent.name+'</span>';
+      var ec=C.filter(function(c){return c.brand===brand.key&&c.entity===ent.name;}).length;
+      if(ec){var es=document.createElement('span');es.className='brand-cnt';es.textContent=ec;eRow.appendChild(es);}
+      eRow.onclick=(function(bk,en){return function(e){e.stopPropagation();selectEntity(bk,en);};})(brand.key,ent.name);
+      entWrap.appendChild(eRow);
+    });
+
+    // Fix onclick closure: re-assign after entWrap is created
+    bRow.onclick=(function(b,ew,ch){return function(){
+      ew.classList.toggle('open');
+      ch.textContent=ew.classList.contains('open')?'▾':'▸';
+      selectBrand(b.key);
+    };})(brand,entWrap,chev);
+
+    bl.appendChild(bRow);bl.appendChild(entWrap);
+  });
+}
+
+function selectBrandAll(){
+  curBrandFilter=null;curEntityFilter=null;
+  document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.add('active');});
+  renderBrandTree();renderContracts();
+}
+function selectBrand(key){
+  curBrandFilter=key;curEntityFilter=null;
+  document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
+  renderBrandTree();renderContracts();
+}
+function selectEntity(brandKey,entityName){
+  curBrandFilter=brandKey;curEntityFilter=entityName;
+  document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
+  renderBrandTree();renderContracts();
+}
+
+// ── Entity dropdown (contract form) ─────────────────────
+function updateEntityOptions(){
+  var bk=getVal('cf-brand');
+  var sel=q('cf-entity');if(!sel)return;
+  sel.innerHTML='<option value="">— Not specified —</option>';
+  if(!bk)return;
+  var brand=BRANDS.find(function(b){return b.key===bk;});
+  if(!brand)return;
+  brand.entities.forEach(function(e){
+    var o=document.createElement('option');o.value=e.name;o.textContent=e.flag+' '+e.name;
+    sel.appendChild(o);
+  });
+}
+function updateUploadEntityOptions(){
+  var bk=getVal('f-brand');
+  var sel=q('f-entity');if(!sel)return;
+  sel.innerHTML='<option value="">— Not specified —</option>';
+  if(!bk)return;
+  var brand=BRANDS.find(function(b){return b.key===bk;});
+  if(!brand)return;
+  brand.entities.forEach(function(e){
+    var o=document.createElement('option');o.value=e.name;o.textContent=e.flag+' '+e.name;
+    sel.appendChild(o);
+  });
+}
+
+// ── Auto-renewal toggles ─────────────────────────────────
+var cfAutoRenewal=false;
+var uploadAutoRenewal=false;
+function setCfAutoRenewal(v){
+  cfAutoRenewal=v;
+  var y=q('cf-ar-yes'),n=q('cf-ar-no');
+  if(y)y.classList.toggle('selected',v);
+  if(n)n.classList.toggle('selected',!v);
+}
+function setUploadAutoRenewal(v){
+  uploadAutoRenewal=v;
+  var y=q('f-ar-yes'),n=q('f-ar-no');
+  if(y)y.classList.toggle('selected',v);
+  if(n)n.classList.toggle('selected',!v);
+}
+
+// ── Inline edit for AI fields ────────────────────────────
+function inlineEdit(btn,field,cid){
+  var c=C.find(function(x){return x.id===cid;});if(!c)return;
+  var cur='';
+  if(field==='type')cur=c.type||'';
+  else if(field==='fees')cur=c.fees||c.amount||'';
+  else if(field==='notice')cur=c.noticePeriod?c.noticePeriod+(c.noticePeriodUnit?' '+c.noticePeriodUnit:''):'';
+  else if(field==='notes')cur=c.notes||'';
+  var val=prompt('Edit '+field+':',cur);
+  if(val===null)return;
+  if(field==='type')c.type=val;
+  else if(field==='fees'){c.fees=val;c.amount=val;}
+  else if(field==='notice'){
+    var parts=val.trim().split(/\s+/);
+    c.noticePeriod=parts[0]?parseInt(parts[0]):null;
+    c.noticePeriodUnit=parts[1]||'days';
+  }
+  else if(field==='notes')c.notes=val;
+  save(SK.C,C);renderContracts();
 }
 function openModal(id){q(id).classList.add('open');}
 function closeModal(id){q(id).classList.remove('open');}
@@ -987,177 +1256,241 @@ function renderDashboard(){
 }
 
 // ── Contracts ───────────────────────────────────────────
+function getComputedStatus(c){
+  var d=daysTo(c.end);
+  if(d===null)return 'active';
+  if(d<0)return 'expired';
+  if(d<=60)return 'expiring';
+  return 'active';
+}
+
 function renderContracts(){
-  // Update counts
-  var counts={all:C.length,reviewing:0,signing:0,active:0,expiring:0,expired:0};
-  C.forEach(function(c){if(counts[c.status]!==undefined)counts[c.status]++;});
-  Object.keys(counts).forEach(function(k){
+  // Build filtered sets by computed status
+  var active=C.filter(function(c){var s=getComputedStatus(c);return s==='active'||s==='expiring';});
+  var expiring=C.filter(function(c){return getComputedStatus(c)==='expiring';});
+  var expired=C.filter(function(c){return getComputedStatus(c)==='expired';});
+  var counts={all:C.length,active:active.length,expiring:expiring.length,expired:expired.length};
+  ['all','active','expiring','expired'].forEach(function(k){
     var e=q('cnt-'+k);if(e)e.textContent='('+counts[k]+')';
   });
   document.querySelectorAll('.ftab').forEach(function(t){
     t.classList.toggle('active',t.dataset.filter===curFilter);
   });
 
-  var dupIds=markDuplicatesInList();
-  var filtered=curFilter==='all'?C:C.filter(function(c){return c.status===curFilter;});
+  var base=curFilter==='all'?C:curFilter==='active'?active:curFilter==='expiring'?expiring:expired;
+
+  // Apply sidebar brand/entity filter
+  var filtered=base;
+  if(curBrandFilter)filtered=filtered.filter(function(c){return c.brand===curBrandFilter;});
+  if(curEntityFilter)filtered=filtered.filter(function(c){return c.entity===curEntityFilter;});
+
   var listEl=q('contracts-list');
   var empty=q('contracts-empty');
   if(!filtered.length){listEl.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';
   listEl.innerHTML='';
 
-  // Group by company
-  var groups={};
-  var groupOrder=[];
+  var dupIds=markDuplicatesInList();
+
+  // Build brand color map
+  var brandColors={};
+  BRANDS.forEach(function(b){brandColors[b.key]=b.color;});
+  var brandNames={};
+  BRANDS.forEach(function(b){brandNames[b.key]=b.name;});
+
+  // Group by brand + entity
+  var groups={};var groupOrder=[];
   filtered.forEach(function(c){
-    var key=c.company||'__none__';
-    if(!groups[key]){groups[key]=[];groupOrder.push(key);}
-    groups[key].push(c);
+    var bk=c.brand||'__none__';
+    var ek=c.entity||'__none__';
+    var key=bk+'||'+ek;
+    if(!groups[key]){groups[key]={brand:bk,entity:ek,list:[]};groupOrder.push(key);}
+    groups[key].list.push(c);
+  });
+  // Sort: by brand name then entity name
+  groupOrder.sort(function(a,b){
+    var ga=groups[a],gb=groups[b];
+    var bn=(brandNames[ga.brand]||ga.brand).localeCompare(brandNames[gb.brand]||gb.brand);
+    if(bn!==0)return bn;
+    return ga.entity.localeCompare(gb.entity);
   });
 
-  // colour palette for group icons (cycles)
-  var palette=[
-    {bg:'#e1f5ee',fg:'#0f6e56'},
-    {bg:'#e6f1fb',fg:'#185fa5'},
-    {bg:'#faeeda',fg:'#854f0b'},
-    {bg:'#f3e8fb',fg:'#6b21a8'},
-    {bg:'#fde8e8',fg:'#991b1b'},
-    {bg:'#e8f4fd',fg:'#0369a1'}
-  ];
+  var COL_GRID='2fr 1.4fr 1fr 90px 90px 110px 55px 100px 1.2fr 115px';
 
-  groupOrder.forEach(function(key, gi){
-    var list=groups[key];
-    var grpLabel=key==='__none__'?'未分配公司':getCompanyLabel(key);
-    var firstChar=(grpLabel||'?')[0];
-    var color=palette[gi%palette.length];
-    var isCollapsed=collapsedGroups[key]===true;
+  groupOrder.forEach(function(key){
+    var grp=groups[key];
+    var color=brandColors[grp.brand]||'#8a9e92';
+    var brandLabel=grp.brand==='__none__'?'Unassigned':brandNames[grp.brand]||grp.brand;
+    var entityLabel=grp.entity==='__none__'?'Unassigned':grp.entity;
+    var grpKey=key;
+    var isCollapsed=collapsedGroups[grpKey]===true;
 
-    // ── Group card wrapper ──
     var card=document.createElement('div');
     card.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;';
 
-    // ── Group header ──
+    // Group header
     var hdr=document.createElement('div');
-    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none;';
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:9px 14px;cursor:pointer;user-select:none;';
     hdr.onmouseover=function(){this.style.background='var(--surface2)';};
     hdr.onmouseout=function(){this.style.background='';};
 
-    var icon=document.createElement('div');
-    icon.textContent=firstChar;
-    icon.style.cssText='width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;background:'+color.bg+';color:'+color.fg+';';
-
-    var nameEl=document.createElement('span');
-    nameEl.textContent=grpLabel||key;
-    nameEl.style.cssText='font-size:13px;font-weight:600;color:var(--text);flex:1;';
-
+    var dot=document.createElement('div');
+    dot.style.cssText='width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0;';
+    var lbl=document.createElement('span');
+    lbl.textContent=brandLabel+' · '+entityLabel;
+    lbl.style.cssText='font-size:13px;font-weight:600;color:var(--text);flex:1;';
     var badge=document.createElement('span');
-    badge.textContent=list.length;
+    badge.textContent=grp.list.length;
     badge.style.cssText='min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text3);display:inline-flex;align-items:center;justify-content:center;';
+    var chev=document.createElement('span');
+    chev.textContent='▾';
+    chev.style.cssText='color:var(--text3);font-size:14px;transition:transform .2s;transform:'+(isCollapsed?'rotate(-90deg)':'rotate(0deg)')+';';
 
-    var chevron=document.createElement('span');
-    chevron.textContent='▾';
-    chevron.style.cssText='color:var(--text3);font-size:14px;transition:transform .2s;transform:'+(isCollapsed?'rotate(-90deg)':'rotate(0deg)')+';';
+    hdr.appendChild(dot);hdr.appendChild(lbl);hdr.appendChild(badge);hdr.appendChild(chev);
 
-    hdr.appendChild(icon);hdr.appendChild(nameEl);hdr.appendChild(badge);hdr.appendChild(chevron);
-
-    // ── Group body ──
+    // Group body
     var body=document.createElement('div');
     body.style.cssText='border-top:1px solid var(--border);'+(isCollapsed?'display:none;':'');
 
-    // Column header
+    // Column header row
     var colHdr=document.createElement('div');
-    colHdr.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:6px 14px;background:var(--surface2);';
-    var cols=['合同名称','对方当事人','类型','状态','签署日期','到期日期','操作'];
-    cols.forEach(function(label,i){
+    colHdr.style.cssText='display:grid;grid-template-columns:'+COL_GRID+';gap:6px;padding:6px 14px;background:var(--surface2);align-items:center;';
+    var COL_LABELS=['Name (File)','Counterparty','Contract Type','Effective Date','End Date','Value / Fees','Auto-Renew','Notice Period','Notes','Actions'];
+    var AI_COLS=[2,5,7,8];
+    COL_LABELS.forEach(function(lbl,i){
       var ch=document.createElement('div');
-      ch.textContent=label;
-      ch.style.cssText='font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.3px;'+(i===6?'text-align:right':'');
+      ch.innerHTML='<span style="font-size:10px;font-weight:600;color:var(--text3);">'+lbl+'</span>'
+        +(AI_COLS.indexOf(i)!==-1?'<span class="ai-badge-sm">AI</span>':'');
+      if(i===9)ch.style.textAlign='right';
       colHdr.appendChild(ch);
     });
     body.appendChild(colHdr);
 
     // Contract rows
-    list.forEach(function(c){
+    grp.list.forEach(function(c){
+      var d=daysTo(c.end);
+      var isExpiring=d!==null&&d>=0&&d<=60;
+      var isExpired=d!==null&&d<0;
+      var hasFile=c.versions&&c.versions.some(function(v){return v.fileData||v.hasFile;});
+
       var row=document.createElement('div');
-      row.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:9px 14px;border-top:1px solid var(--border);align-items:center;font-size:13px;cursor:pointer;';
-      row.onmouseover=function(){this.style.background='var(--surface2)';};
-      row.onmouseout=function(){this.style.background='';};
+      row.className='contract-row';
+      row.style.cssText='display:grid;grid-template-columns:'+COL_GRID+';gap:6px;padding:9px 14px;border-top:1px solid var(--border);align-items:center;font-size:12px;cursor:pointer;';
       row.onclick=function(){openContractDetail(c.id);};
 
-      // Col 1: Name + ID + dup badge
-      var colName=document.createElement('div');
-      var nm=mk('div','cn',c.name);nm.style.cssText='font-weight:600;color:var(--text);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-      var cid=mk('div','cid',c.id);cid.style.cssText='font-size:11px;color:var(--text3);margin-top:1px;';
-      colName.appendChild(nm);colName.appendChild(cid);
+      // Col 1: Name + file icon + ID
+      var c1=document.createElement('div');
+      var fileIconSp=document.createElement('span');
+      fileIconSp.textContent=hasFile?'📄 ':'📋 ';
+      fileIconSp.style.cssText='font-size:11px;'+(hasFile?'color:var(--accent);':'color:var(--text3);');
+      var nmSp=document.createElement('span');
+      nmSp.textContent=c.name;
+      nmSp.style.cssText='font-weight:600;color:var(--text);';
+      var cidDiv=mk('div','cid',c.id);
+      cidDiv.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;';
+      c1.appendChild(fileIconSp);c1.appendChild(nmSp);c1.appendChild(cidDiv);
       if(dupIds.indexOf(c.id)!==-1){
-        var dupBadge=mk('span','','⚠️ 疑似重复');
-        dupBadge.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;font-weight:600;background:#fff3e0;color:#f57f17;border:1px solid #ffe082;margin-top:3px;display:inline-block;cursor:pointer';
-        dupBadge.onclick=function(e){e.stopPropagation();showDupList(c.name,c.party);};
-        colName.appendChild(dupBadge);
-      }
-      if(c.notes&&c.notes.trim()){
-        var nt=mk('div','',c.notes.trim());
-        nt.style.cssText='font-size:11px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px;';
-        nt.title=c.notes.trim();
-        colName.appendChild(nt);
+        var db=mk('span','','⚠ Duplicate');
+        db.style.cssText='font-size:10px;padding:1px 6px;border-radius:6px;background:#fff3e0;color:#f57f17;border:1px solid #ffe082;margin-top:3px;display:inline-block;cursor:pointer;';
+        db.onclick=function(e){e.stopPropagation();showDupList(c.name,c.party);};
+        c1.appendChild(db);
       }
 
-      // Col 2: Party
-      var colParty=document.createElement('div');
-      colParty.textContent=c.party||'--';
-      colParty.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      // Col 2: Counterparty
+      var c2=document.createElement('div');
+      c2.textContent=c.party||'—';
+      c2.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
-      // Col 3: Type
-      var colType=document.createElement('div');
-      var ct=mk('span','ct',c.type||'--');
-      colType.appendChild(ct);
+      // Col 3: Contract Type (AI editable)
+      var c3=document.createElement('div');
+      c3.style.cssText='display:flex;align-items:center;gap:3px;';
+      var typeSpan=mk('span','',c.type||'—');typeSpan.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
+      var typeEdit=mk('span','inline-edit-btn','✎');
+      typeEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'type',id);};})(c.id);
+      c3.appendChild(typeSpan);c3.appendChild(typeEdit);
 
-      // Col 4: Status
-      var colStatus=document.createElement('div');
-      colStatus.appendChild(mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status));
+      // Col 4: Effective Date
+      var c4=mk('div','',c.start||'—');
+      c4.style.cssText='color:var(--text2);font-size:11px;';
 
-      // Col 5: Start date
-      var colStart=document.createElement('div');
-      colStart.textContent=c.start||'--';
-      colStart.style.cssText='color:var(--text2);font-size:12px;';
+      // Col 5: End Date
+      var c5=mk('div','',c.end||'—');
+      c5.style.cssText='font-size:11px;'+(isExpired?'color:var(--red);':(isExpiring?'color:var(--orange);font-weight:600;':'color:var(--text2);'));
 
-      // Col 6: End date
-      var colEnd=document.createElement('div');
-      colEnd.textContent=c.end||'--';
-      colEnd.style.cssText='color:var(--text2);font-size:12px;'+(c.status==='expiring'?'color:var(--orange);font-weight:600;':'')+(c.status==='expired'?'color:var(--text3);':'');
+      // Col 6: Value/Fees (AI editable)
+      var c6=document.createElement('div');
+      c6.style.cssText='display:flex;align-items:center;gap:3px;';
+      var feesVal=c.fees||c.amount||'';
+      var feesTxt=c.currency&&feesVal?'<span style="font-size:9px;padding:1px 3px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);margin-right:2px;">'+c.currency+'</span>'+feesVal:(feesVal||'—');
+      var feesSpan=document.createElement('span');feesSpan.innerHTML=feesTxt;feesSpan.style.cssText='flex:1;min-width:0;';
+      var feesEdit=mk('span','inline-edit-btn','✎');
+      feesEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'fees',id);};})(c.id);
+      c6.appendChild(feesSpan);c6.appendChild(feesEdit);
 
-      // Col 7: Actions
-      var colAct=document.createElement('div');
-      colAct.style.cssText='display:flex;gap:4px;justify-content:flex-end;';
+      // Col 7: Auto-Renewal
+      var c7=document.createElement('div');
+      c7.style.cssText='text-align:center;font-size:13px;';
+      c7.textContent=c.autoRenewal?'✓':'✗';
+      c7.style.color=c.autoRenewal?'var(--accent)':'var(--text3)';
+
+      // Col 8: Notice Period (AI editable)
+      var c8=document.createElement('div');
+      c8.style.cssText='display:flex;align-items:center;gap:3px;';
+      var noticeVal=c.noticePeriod?(c.noticePeriod+' '+(c.noticePeriodUnit||'days')):'—';
+      var noticeSpan=mk('span','',noticeVal);noticeSpan.style.cssText='color:var(--text2);flex:1;';
+      var noticeEdit=mk('span','inline-edit-btn','✎');
+      noticeEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'notice',id);};})(c.id);
+      c8.appendChild(noticeSpan);c8.appendChild(noticeEdit);
+
+      // Col 9: Notes (AI editable)
+      var c9=document.createElement('div');
+      c9.style.cssText='display:flex;align-items:center;gap:3px;min-width:0;';
+      var notesSpan=mk('span','',c.notes||'—');
+      notesSpan.style.cssText='color:var(--text3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
+      if(c.notes)notesSpan.title=c.notes;
+      var notesEdit=mk('span','inline-edit-btn','✎');
+      notesEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'notes',id);};})(c.id);
+      c9.appendChild(notesSpan);c9.appendChild(notesEdit);
+
+      // Col 10: Actions
+      var c10=document.createElement('div');
+      c10.style.cssText='display:flex;gap:3px;justify-content:flex-end;';
       var latestFile=null;
       if(c.versions&&c.versions.length){
         var finals=c.versions.filter(function(v){return v.type==='final'&&(v.fileData||v.hasFile);});
         if(finals.length)latestFile=finals[finals.length-1];
         else{var any=c.versions.filter(function(v){return v.fileData||v.hasFile;});if(any.length)latestFile=any[any.length-1];}
       }
-      function iconBtn(title,label,cb){
-        var b=document.createElement('button');
-        b.className='act-btn';b.title=title;b.textContent=label;
-        b.onclick=function(e){e.stopPropagation();cb();};
-        return b;
+      function actBtn(title,label,cb){
+        var b=document.createElement('button');b.className='act-btn';b.title=title;b.textContent=label;
+        b.onclick=function(e){e.stopPropagation();cb();};return b;
       }
       if(latestFile){
-        colAct.appendChild(iconBtn('下载 '+(latestFile.fileName||''),'⬇',function(){downloadContractFile(latestFile);}));
-        colAct.appendChild(iconBtn('预览','👁',function(){previewContractFile(latestFile);}));
+        c10.appendChild(actBtn('Download','⬇',function(){downloadContractFile(latestFile);}));
+        c10.appendChild(actBtn('Preview','👁',function(){previewContractFile(latestFile);}));
       }
-      colAct.appendChild(iconBtn('编辑','编辑',function(){openContractForm(c.id);}));
-      colAct.appendChild(iconBtn('删除','删除',function(){deleteContract(c.id);}));
+      c10.appendChild(actBtn('Edit','编辑',function(){openContractForm(c.id);}));
+      c10.appendChild(actBtn('Delete','删除',function(){deleteContract(c.id);}));
 
-      [colName,colParty,colType,colStatus,colStart,colEnd,colAct].forEach(function(col){row.appendChild(col);});
+      // Hover: show/hide inline edit buttons
+      row.onmouseover=function(){
+        this.style.background='var(--al)';
+        this.querySelectorAll('.inline-edit-btn').forEach(function(b){b.style.opacity='1';});
+      };
+      row.onmouseout=function(){
+        this.style.background='';
+        this.querySelectorAll('.inline-edit-btn').forEach(function(b){b.style.opacity='0';});
+      };
+
+      [c1,c2,c3,c4,c5,c6,c7,c8,c9,c10].forEach(function(col){row.appendChild(col);});
       body.appendChild(row);
     });
 
-    // Toggle behaviour
     hdr.onclick=function(){
       var nowCollapsed=body.style.display==='none';
       body.style.display=nowCollapsed?'':'none';
-      chevron.style.transform=nowCollapsed?'rotate(0deg)':'rotate(-90deg)';
-      collapsedGroups[key]=!nowCollapsed;
+      chev.style.transform=nowCollapsed?'rotate(0deg)':'rotate(-90deg)';
+      collapsedGroups[grpKey]=!nowCollapsed;
     };
 
     card.appendChild(hdr);card.appendChild(body);
@@ -1174,47 +1507,67 @@ function deleteContract(id){
 }
 function openContractForm(id){
   editCid=id||null;
-  setText('cf-title',id?'编辑合同':'添加合同');
+  setText('cf-title',id?'Edit Contract':'Add Contract');
   var c=id?C.find(function(x){return x.id===id;}):null;
   setVal('cf-name',c?c.name:'');
   setVal('cf-id',c?c.id:genId(''));
   setVal('cf-party',c?c.party:'');
-  setVal('cf-amount',c?c.amount:'');
-  setVal('cf-notes',c?c.notes:'');
   setVal('cf-start',c?c.start:'');
   setVal('cf-end',c?c.end:'');
-  setOpt('cf-type',c?c.type:'服务协议');
-  setOpt('cf-status',c?c.status:'reviewing');
-  buildCompanyOptions('cf-company',c?c.company||'':'');
+  // Brand + entity
+  setOpt('cf-brand',c?c.brand||'':'');
+  updateEntityOptions();
+  if(c&&c.entity)setOpt('cf-entity',c.entity);
+  // Contract type (input, not select)
+  setVal('cf-type',c?c.type||'':'');
+  // Currency + fees
+  setOpt('cf-currency',c?c.currency||'SGD':'SGD');
+  setVal('cf-fees',c?c.fees||c.amount||'':'');
+  // Auto-renewal toggle
+  setCfAutoRenewal(c?!!c.autoRenewal:false);
+  // Notice period
+  setVal('cf-notice',c&&c.noticePeriod!=null?c.noticePeriod:'');
+  setOpt('cf-notice-unit',c?c.noticePeriodUnit||'days':'days');
+  // Notes
+  setVal('cf-notes',c?c.notes||'':'');
   openModal('modal-contract-form');
 }
 function updateCfId(){if(!editCid)setVal('cf-id',genId(getVal('cf-start')));}
 function saveContract(){
   var name=getVal('cf-name').trim(),party=getVal('cf-party').trim();
-  if(!name||!party){alert('请填写合同名称和对方当事人');return;}
-  var data={id:getVal('cf-id').trim()||genId(getVal('cf-start')),name:name,party:party,
-    type:getVal('cf-type'),status:getVal('cf-status'),amount:getVal('cf-amount').trim(),
-    company:getVal('cf-company'),
-    start:getVal('cf-start'),end:getVal('cf-end'),notes:getVal('cf-notes').trim(),versions:[]};
+  if(!name||!party){alert('Please fill in Contract Name and Counterparty.');return;}
+  var npRaw=getVal('cf-notice').trim();
+  var data={
+    id:getVal('cf-id').trim()||genId(getVal('cf-start')),
+    name:name,party:party,
+    brand:getVal('cf-brand')||null,
+    entity:getVal('cf-entity')||null,
+    type:getVal('cf-type').trim(),
+    currency:getVal('cf-currency')||'SGD',
+    fees:getVal('cf-fees').trim(),
+    amount:getVal('cf-fees').trim(), // backward-compat alias
+    autoRenewal:cfAutoRenewal,
+    noticePeriod:npRaw?parseInt(npRaw,10):null,
+    noticePeriodUnit:getVal('cf-notice-unit')||'days',
+    start:getVal('cf-start'),
+    end:getVal('cf-end'),
+    notes:getVal('cf-notes').trim(),
+    versions:[]
+  };
 
-  // Check for duplicates only when adding new contract (not editing)
   if(!editCid){
-    showDuplicateWarning(name, party,
-      function(){ // proceed
+    showDuplicateWarning(name,party,
+      function(){
         C.push(data);
-        save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();
+        save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();renderBrandTree();
       },
-      function(existing){ // merge
-        mergeIntoExisting(existing);
-      }
+      function(existing){mergeIntoExisting(existing);}
     );
     return;
   }
-
-  // Editing existing contract — no duplicate check
   var idx=C.findIndex(function(x){return x.id===editCid;});
   if(idx!==-1){data.versions=C[idx].versions||[];C[idx]=data;}
-  save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();
+  save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();renderBrandTree();
 }
 
 // ── Contract detail / versions ──────────────────────────
@@ -1225,21 +1578,26 @@ function openContractDetail(id){
   setText('cd-name',c.name);
   var meta=q('cd-meta');
   meta.innerHTML='';
-  var coLabel=c.company?getCompanyLabel(c.company):'--';
+  var brandNames={};BRANDS.forEach(function(b){brandNames[b.key]=b.name;});
+  var bLabel=c.brand?(brandNames[c.brand]||c.brand):'--';
+  var feesDisplay=c.fees||c.amount||'--';if(feesDisplay!=='--'&&c.currency)feesDisplay=c.currency+' '+feesDisplay;
+  var noticeDisplay=c.noticePeriod?(c.noticePeriod+' '+(c.noticePeriodUnit||'days')):'--';
   var fields=[
-    ['合同编号',c.id],['对方当事人',c.party||'--'],['合同类型',c.type||'--'],
-    ['所属公司',coLabel],['签署日期',c.start||'--'],['到期日期',c.end||'--'],['合同金额',c.amount||'--']
+    ['Contract ID',c.id],['Counterparty',c.party||'--'],['Contract Type',c.type||'--'],
+    ['Brand',bLabel],['Entity',c.entity||'--'],
+    ['Effective Date',c.start||'--'],['End Date',c.end||'--'],
+    ['Value / Fees',feesDisplay],['Auto-Renewal',c.autoRenewal?'Yes':'No'],['Notice Period',noticeDisplay]
   ];
   fields.forEach(function(f){
     var d=mk('div');
     var lb=mk('div','form-label',f[0]);
     var vl=mk('div','',f[1]);vl.style.cssText='font-size:13px;margin-top:3px';
-    if(f[0]==='合同金额')vl.style.color='var(--accent)';
+    if(f[0]==='Value / Fees')vl.style.color='var(--accent)';
     d.appendChild(lb);d.appendChild(vl);meta.appendChild(d);
   });
-  // Status badge
+  // Status badge (computed)
   var sb=q('cd-status');
-  if(sb){sb.innerHTML='';var b=mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status);sb.appendChild(b);}
+  if(sb){sb.innerHTML='';var cs=getComputedStatus(c);var b=mk('span','badge '+(SB[cs]||'b-active'),SL[cs]||cs);sb.appendChild(b);}
   // Notes
   var nw=q('cd-notes-wrap');
   if(c.notes){nw.style.display='block';setText('cd-notes',c.notes);}else{nw.style.display='none';}
@@ -1396,13 +1754,15 @@ function updateUploadId(){setVal('f-id',genId(getVal('f-start')||''));}
 function showReview(f,data){
   showStep(2,false);showStep(3,true);
   setText('up-fname',f.name);setText('up-fsize',(f.size/1024/1024).toFixed(2)+' MB');
-  buildCompanyOptions('f-company','');
   setVal('f-id',genId(data.startDate||''));
   if(data.name)setVal('f-name',data.name);
-  if(data.type)setOpt('f-type',data.type);
+  if(data.type)setVal('f-type',data.type);
   if(data.party)setVal('f-party',data.party);
-  if(data.amount)setVal('f-amount',data.amount);
-  if(data.law)setOpt('f-law',data.law);
+  if(data.currency)setOpt('f-currency',data.currency);
+  if(data.fees)setVal('f-fees',data.fees);
+  if(data.autoRenewal!=null)setUploadAutoRenewal(!!data.autoRenewal);
+  if(data.noticePeriod)setVal('f-notice',data.noticePeriod);
+  if(data.noticePeriodUnit)setOpt('f-notice-unit',data.noticePeriodUnit);
   if(data.startDate)setVal('f-start',data.startDate);
   if(data.endDate)setVal('f-end',data.endDate);
   if(data.summary)setVal('f-notes',data.summary);
@@ -1427,14 +1787,23 @@ function archiveContract(){
         if(vi!==-1){C[ci].versions[vi].fileData=uploadedFileData.dataUrl;save(SK.C,C);}}
     });
   }
-  var newC={id:cid,name:name,party:getVal('f-party')||'--',type:getVal('f-type'),
-    status:getVal('f-status'),amount:getVal('f-amount'),company:getVal('f-company'),
+  var npRaw=getVal('f-notice').trim();
+  var newC={id:cid,name:name,party:getVal('f-party')||'--',
+    brand:getVal('f-brand')||null,
+    entity:getVal('f-entity')||null,
+    type:getVal('f-type'),
+    currency:getVal('f-currency')||'SGD',
+    fees:getVal('f-fees')||getVal('f-amount')||'',
+    amount:getVal('f-fees')||getVal('f-amount')||'', // backward-compat
+    autoRenewal:uploadAutoRenewal,
+    noticePeriod:npRaw?parseInt(npRaw,10):null,
+    noticePeriodUnit:getVal('f-notice-unit')||'days',
     start:getVal('f-start'),end:getVal('f-end'),notes:getVal('f-notes'),
     versions:[ver]};
   C.push(newC);save(SK.C,C);
   showStep(3,false);showStep(4,true);
-  setText('up-success-msg','"'+name+'" 已归档 · '+(upIsFinal?'标记为最终签署版':'归档为历史版本'));
-  renderDashboard();
+  setText('up-success-msg','"'+name+'" archived · '+(upIsFinal?'Marked as final signed version':'Archived as draft'));
+  renderDashboard();renderBrandTree();
 }
 function resetUpload(){
   upIsFinal=false;
@@ -1444,7 +1813,7 @@ function resetUpload(){
   showStep(1,true);showStep(2,false);showStep(3,false);showStep(4,false);
   setProgress(0,'');var fi=q('fileInput');if(fi)fi.value='';
 }
-var AI_SYS='你是合同信息提取专家。仔细阅读合同，提取以下信息并严格以JSON返回，不要其他文字：{"name":"合同完整名称","type":"服务协议/采购合同/保密协议（NDA）/劳动合同/合作协议/租赁合同/其他 之一","party":"对方当事人全称","amount":"合同金额含货币单位，无则空字符串","law":"新加坡法律/中华人民共和国法律/英国法律/其他 之一","startDate":"签署日期YYYY-MM-DD，无则空字符串","endDate":"到期日期YYYY-MM-DD，无则空字符串","summary":"2-3句中文摘要"}只返回JSON。';
+var AI_SYS='你是合同信息提取专家。仔细阅读合同，提取以下信息并严格以JSON返回，不要其他文字：{"name":"合同完整名称","type":"合同类型，如：服务协议/采购合同/保密协议（NDA）/劳动合同/合作协议/租赁合同/技术许可/分销协议/其他","party":"对方当事人全称","currency":"货币代码，如 SGD/USD/CNY/HKD，无则空字符串","fees":"合同金额数字部分，无则空字符串","autoRenewal":true或false,"noticePeriod":"终止通知期数字，无则空字符串","noticePeriodUnit":"days/months/years","startDate":"签署/生效日期YYYY-MM-DD，无则空字符串","endDate":"到期日期YYYY-MM-DD，无则空字符串","summary":"2-3句摘要，说明核心服务内容、关键义务、特别注意事项"}只返回JSON。';
 function callAI(b64,isPDF,fname,file){
   var msgs;
   if(isPDF){
@@ -2909,7 +3278,7 @@ q('searchInput').addEventListener('input',function(){
     colName.appendChild(nm);colName.appendChild(cid);
     var colParty=document.createElement('div');colParty.textContent=c.party||'--';colParty.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     var colType=document.createElement('div');colType.appendChild(mk('span','ct',c.type||'--'));
-    var colStatus=document.createElement('div');colStatus.appendChild(mk('span','badge '+(SB[c.status]||'b-active'),SL[c.status]||c.status));
+    var colStatus=document.createElement('div');var _cs=getComputedStatus(c);colStatus.appendChild(mk('span','badge '+(SB[_cs]||'b-active'),SL[_cs]||_cs));
     var colStart=document.createElement('div');colStart.textContent=c.start||'--';colStart.style.cssText='color:var(--text2);font-size:12px;';
     var colEnd=document.createElement('div');colEnd.textContent=c.end||'--';colEnd.style.cssText='color:var(--text2);font-size:12px;';
     var colAct=document.createElement('div');colAct.style.cssText='display:flex;gap:4px;justify-content:flex-end;';
