@@ -256,13 +256,16 @@ async function runDriveScan() {
 
   const drive = getDriveClient();
 
-  // 1. List all files in Drive folder
+  // 1. List all files in Drive folder (supportsAllDrives for Shared Drives)
   const listRes = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
     fields: 'files(id,name,mimeType,modifiedTime,size)',
-    pageSize: 200
+    pageSize: 200,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
   });
   const allFiles = listRes.data.files || [];
+  console.log(`Drive scan: found ${allFiles.length} files in folder ${folderId}`);
 
   // 2. Get existing contract driveFileIds from Firestore
   const contractsDoc = await db.collection('cms').doc('contracts').get();
@@ -295,10 +298,10 @@ async function runDriveScan() {
 
       if (mime === 'application/vnd.google-apps.document') {
         // Native Google Doc → export as PDF
-        const r = await drive.files.export({ fileId: file.id, mimeType: 'application/pdf' }, { responseType: 'arraybuffer' });
+        const r = await drive.files.export({ fileId: file.id, mimeType: 'application/pdf', supportsAllDrives: true }, { responseType: 'arraybuffer' });
         buffer = Buffer.from(r.data); mime = 'application/pdf';
       } else {
-        const r = await drive.files.get({ fileId: file.id, alt: 'media' }, { responseType: 'arraybuffer' });
+        const r = await drive.files.get({ fileId: file.id, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
         buffer = Buffer.from(r.data);
       }
 
@@ -385,6 +388,38 @@ async function runDriveScan() {
 
   return { ...scanLog, errorDetails: errors };
 }
+
+// GET /api/drive/debug — diagnose Drive access
+app.get('/api/drive/debug', async (req, res) => {
+  try {
+    const folderId = process.env.DRIVE_FOLDER_ID;
+    const drive = getDriveClient();
+
+    // Try to get folder metadata
+    let folderInfo = null;
+    try {
+      const f = await drive.files.get({ fileId: folderId, fields: 'id,name,mimeType', supportsAllDrives: true });
+      folderInfo = f.data;
+    } catch(e) { folderInfo = { error: e.message }; }
+
+    // Try to list files
+    let files = [], listError = null;
+    try {
+      const r = await drive.files.list({
+        q: `'${folderId}' in parents and trashed = false`,
+        fields: 'files(id,name,mimeType)',
+        pageSize: 20,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+      files = r.data.files || [];
+    } catch(e) { listError = e.message; }
+
+    res.json({ folderId, folderInfo, fileCount: files.length, files: files.slice(0,10), listError });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // POST /api/drive/scan — manual trigger from frontend
 app.post('/api/drive/scan', async (req, res) => {
