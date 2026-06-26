@@ -239,12 +239,12 @@ textarea.form-input{resize:vertical;}
     <div class="topbar-title" id="pageTitle">控制台</div><div id="sync-status" style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;margin-left:8px"></div>
     <div class="search-box"><span style="color:var(--text3)">🔍</span><input type="text" id="searchInput" placeholder="搜索合同名称、对方当事人…"></div>
     <div class="topbar-right">
-      <button class="btn btn-ghost" onclick="openDriveImport()" title="从Google Drive导入合同">📂 Drive 导入</button>
-      <button class="btn btn-ghost" onclick="exportJSON()" title="导出完整数据备份（JSON）">📤 导出备份</button>
-      <button class="btn btn-ghost" onclick="document.getElementById('importJSONInput').click()" title="从JSON备份文件恢复数据">📥 导入备份</button>
+      <button class="btn btn-ghost" onclick="openDriveImport()" title="Import contracts from Google Drive">📂 Drive Import</button>
+      <button class="btn btn-ghost" onclick="exportJSON()" title="Export full data backup (JSON)">📤 Export</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('importJSONInput').click()" title="Restore from JSON backup">📥 Import</button>
       <input type="file" id="importJSONInput" accept=".json" style="display:none" onchange="importJSON(this)">
       <button class="btn btn-ghost" onclick="exportExcel()">⬇ Excel</button>
-      <button class="btn btn-primary" onclick="navTo('upload')">＋ 上传合同</button>
+      <button class="btn btn-primary" onclick="navTo('upload')">＋ Upload Contract</button>
     </div>
   </div>
   <div class="content">
@@ -1020,9 +1020,9 @@ var IC_TYPES_DEFAULT=[
 var IC_TYPES=(function(){var s=load(SK.IC_TYPES);return(s&&s.length)?s:JSON.parse(JSON.stringify(IC_TYPES_DEFAULT));})();
 
 var ALERT_RULES_DEFAULT=[
-  {key:'r7',  days:7,  label:'紧急提醒',    color:'red',    icon:'🚨', enabled:true},
-  {key:'r30', days:30, label:'即将到期',    color:'orange', icon:'⚠️', enabled:true},
-  {key:'r60', days:60, label:'提前预警',    color:'yellow', icon:'📅', enabled:true}
+  {key:'r7',  days:7,  label:'Urgent',        color:'red',    icon:'🚨', enabled:true},
+  {key:'r30', days:30, label:'Expiring Soon',  color:'orange', icon:'⚠️', enabled:true},
+  {key:'r60', days:60, label:'Early Warning',  color:'yellow', icon:'📅', enabled:true}
 ];
 var ALERT_RULES=(function(){var s=load(SK.RULES);return(s&&s.length)?s:JSON.parse(JSON.stringify(ALERT_RULES_DEFAULT));})();
 
@@ -3523,10 +3523,10 @@ function renderAlertRules(){
 
   // Header
   var hdr=mk('div');hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;';
-  var title=mk('span','','提醒规则');title.style.cssText='font-size:14px;font-weight:700;';
-  var addBtn=mk('button','btn btn-ghost','＋ 新建规则');addBtn.style.fontSize='12px';
+  var title=mk('span','','Reminder Rules');title.style.cssText='font-size:14px;font-weight:700;';
+  var addBtn=mk('button','btn btn-ghost','＋ New Rule');addBtn.style.fontSize='12px';
   addBtn.onclick=function(){
-    ALERT_RULES.push({key:'r'+Date.now(),days:90,label:'自定义提醒',color:'gray',icon:'🔔',enabled:true});
+    ALERT_RULES.push({key:'r'+Date.now(),days:90,label:'Custom Reminder',color:'gray',icon:'🔔',enabled:true});
     save(SK.RULES,ALERT_RULES);renderAlertRules();renderAlertList();
   };
   hdr.appendChild(title);hdr.appendChild(addBtn);card.appendChild(hdr);
@@ -3547,7 +3547,7 @@ function renderAlertRules(){
     var daysWrap=mk('div');daysWrap.style.cssText='display:flex;align-items:center;gap:4px;flex-shrink:0;';
     var daysNum=mk('span','',''+rule.days);
     daysNum.style.cssText='font-size:16px;font-weight:700;font-family:JetBrains Mono,monospace;color:'+col+';cursor:pointer;padding:0 2px;border-radius:3px;';
-    daysNum.title='点击修改天数';
+    daysNum.title='Click to edit days';
     daysNum.onclick=(function(ri2,dn){return function(e){
       e.stopPropagation();
       var inp=document.createElement('input');inp.type='number';inp.min='1';inp.max='365';inp.value=ALERT_RULES[ri2].days;
@@ -3556,13 +3556,13 @@ function renderAlertRules(){
       function done(){var v=parseInt(inp.value);if(v>0&&v<=999)ALERT_RULES[ri2].days=v;save(SK.RULES,ALERT_RULES);renderAlertRules();renderAlertList();}
       inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=ALERT_RULES[ri2].days;inp.blur();}};
     };})(ri,daysNum);
-    var daysLbl=mk('span','','天内到期');daysLbl.style.cssText='font-size:12px;color:var(--text2);white-space:nowrap;';
+    var daysLbl=mk('span','','d to expiry');daysLbl.style.cssText='font-size:12px;color:var(--text2);white-space:nowrap;';
     daysWrap.appendChild(daysNum);daysWrap.appendChild(daysLbl);
 
     // Editable label
     var lbl=mk('span','',rule.label);
     lbl.style.cssText='flex:1;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;';
-    lbl.title='点击修改名称';
+    lbl.title='Click to edit name';
     lbl.onclick=(function(ri2,l){return function(e){
       e.stopPropagation();
       var inp=document.createElement('input');inp.type='text';inp.value=ALERT_RULES[ri2].label;
@@ -3573,7 +3573,7 @@ function renderAlertRules(){
     };})(ri,lbl);
 
     // Match count badge
-    var badge=mk('span','',mc?mc+'份':'');
+    var badge=mk('span','',mc?mc+(mc===1?' contract':' contracts'):'');
     badge.style.cssText='font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;flex-shrink:0;'+(mc?'background:'+bg+';color:'+col+';':'color:var(--border);');
 
     // Toggle switch
@@ -3589,10 +3589,10 @@ function renderAlertRules(){
     // Delete
     var delBtn=mk('span','','×');
     delBtn.style.cssText='font-size:15px;color:var(--text3);cursor:pointer;flex-shrink:0;padding:0 2px;line-height:1;';
-    delBtn.title='删除此规则';
+    delBtn.title='Delete rule';
     delBtn.onclick=(function(ri2){return function(e){
       e.stopPropagation();
-      if(confirm('删除规则「'+ALERT_RULES[ri2].label+'」？')){
+      if(confirm('Delete rule "'+ALERT_RULES[ri2].label+'"?')){
         ALERT_RULES.splice(ri2,1);save(SK.RULES,ALERT_RULES);
         renderAlertRules();renderAlertList();updateNavCounts();
       }
@@ -3604,7 +3604,7 @@ function renderAlertRules(){
   card.appendChild(list);
 
   if(!ALERT_RULES.length){
-    var rst=mk('button','btn btn-ghost','恢复默认规则');
+    var rst=mk('button','btn btn-ghost','Restore defaults');
     rst.style.cssText='font-size:12px;margin-top:12px;';
     rst.onclick=function(){ALERT_RULES=JSON.parse(JSON.stringify(ALERT_RULES_DEFAULT));save(SK.RULES,ALERT_RULES);renderAlertRules();renderAlertList();};
     card.appendChild(rst);
@@ -3628,17 +3628,17 @@ function renderAlertList(){
 
   // Header
   var hdr=mk('div');hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:14px;';
-  var htitle=mk('span','','待处理提醒');htitle.style.cssText='font-size:14px;font-weight:700;';
+  var htitle=mk('span','','Pending Reminders');htitle.style.cssText='font-size:14px;font-weight:700;';
   var hcnt=mk('span','',totalCount?''+totalCount:'');
   hcnt.style.cssText='font-size:11px;background:var(--rl);color:var(--red);padding:1px 7px;border-radius:8px;font-weight:700;display:'+(totalCount?'inline':'none')+';';
   hdr.appendChild(htitle);hdr.appendChild(hcnt);card.appendChild(hdr);
 
   if(!enabledRules.length){
-    var off=mk('div','','所有提醒规则已关闭');off.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px;';
+    var off=mk('div','','All reminder rules are disabled');off.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px;';
     card.appendChild(off);return;
   }
   if(!totalCount){
-    var em=mk('div','','近期无需处理的提醒，所有合同状态正常 ✅');
+    var em=mk('div','','No pending reminders — all contracts are on track ✅');
     em.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px;';
     card.appendChild(em);return;
   }
@@ -3657,7 +3657,7 @@ function renderAlertList(){
     var grp=mk('div');grp.style.cssText='margin-bottom:16px;';
     var glbl=mk('div');glbl.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;font-weight:700;color:'+col+';letter-spacing:.3px;';
     glbl.appendChild(mk('span','',rule.icon));
-    glbl.appendChild(mk('span','',rule.label+' ('+rule.days+'天内) — '+rContracts.length+'份'));
+    glbl.appendChild(mk('span','',rule.label+' (within '+rule.days+'d) — '+rContracts.length+(rContracts.length===1?' contract':' contracts')));
     grp.appendChild(glbl);
 
     rContracts.forEach(function(c){
@@ -3670,9 +3670,9 @@ function renderAlertList(){
       var sub=mk('div','alert-info',subTxt);
       inf.appendChild(nm);inf.appendChild(sub);
       var right=mk('div');right.style.cssText='display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;';
-      var dt=mk('div','',d===0?'今天到期！':d===1?'明天到期！':d+'天后');dt.style.cssText='font-size:11px;font-weight:700;color:'+col+';white-space:nowrap;';
+      var dt=mk('div','',d===0?'Expires today!':d===1?'Expires tomorrow!':d+'d left');dt.style.cssText='font-size:11px;font-weight:700;color:'+col+';white-space:nowrap;';
       var dd=mk('div','',c.end);dd.style.cssText='font-size:10px;color:var(--text3);font-family:JetBrains Mono,monospace;';
-      var btn=mk('button','btn btn-ghost','查看');btn.style.cssText='font-size:11px;padding:3px 8px;';
+      var btn=mk('button','btn btn-ghost','View');btn.style.cssText='font-size:11px;padding:3px 8px;';
       btn.onclick=(function(cc){return function(){openContractDetail(cc);};})(c);
       right.appendChild(dt);right.appendChild(dd);right.appendChild(btn);
       row.appendChild(dot);row.appendChild(inf);row.appendChild(right);
