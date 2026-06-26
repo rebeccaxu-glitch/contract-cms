@@ -847,7 +847,7 @@ function openFromStorage(storageUrl, fileType, fileName){
 // ═══════════════════════════════════════════════════════
 
 // ── Storage keys ──────────────────────────────────────
-var SK = { C:'cms_c', E:'cms_e', T:'cms_t', M:'cms_m' };
+var SK = { C:'cms_c', E:'cms_e', T:'cms_t', M:'cms_m', BRANDS:'cms_brands_v1' };
 
 // ── Default data ───────────────────────────────────────
 var DEF_C = [
@@ -870,8 +870,8 @@ var DEF_T = [
   {id:2,name:'上海XYZ科技',icon:'🌏',desc:'中国区模板',files:[{id:1,name:'采购框架协议',type:'采购合同',lang:'中文',ver:'v1.0',note:'',added:'2026-03-01'}]}
 ];
 
-// ── Brand / Entity hierarchy (hardcoded) ──────────────
-var BRANDS = [
+// ── Brand / Entity hierarchy (editable, persisted) ────
+var BRANDS_DEFAULT = [
   {key:'orbitlabs', name:'Orbitlabs', color:'#1d9e75', entities:[
     {flag:'🇸🇬', name:'Orbitlabs Pte. Ltd.'},
     {flag:'🇨🇳', name:'深圳市星轨实验科技有限公司'},
@@ -922,6 +922,8 @@ var BRANDS = [
     {flag:'🇸🇬', name:'Magic Papaya Pte. Ltd.'}
   ]}
 ];
+var BRANDS = (function(){var s=load(SK.BRANDS);return(s&&s.length)?s:JSON.parse(JSON.stringify(BRANDS_DEFAULT));})();
+var BRAND_COLORS=['#1d9e75','#378add','#d85a30','#7f77dd','#ba7517','#d4537e','#639922','#534ab7','#2a7a8a','#8a5a2a'];
 
 // ── State ──────────────────────────────────────────────
 var C, E, T, M;
@@ -1028,19 +1030,19 @@ function navTo(pid){
 function renderBrandTree(){
   var bl=q('brand-list');if(!bl)return;
   bl.innerHTML='';
-  // Update "All contracts" count
   var ac=q('brand-all-count');if(ac)ac.textContent=C.length;
 
   BRANDS.forEach(function(brand){
     var brandCount=C.filter(function(c){return c.brand===brand.key;}).length;
-    var isOpen=collapsedBrands[brand.key]!==false; // default open = depends on selection
+    // Default: collapsed (true = collapsed); user can expand
+    var isOpen=collapsedBrands[brand.key]===true; // true means OPEN
 
-    // Brand row
     var bRow=document.createElement('div');
     bRow.className='brand-row'+(curBrandFilter===brand.key&&!curEntityFilter?' active':'');
 
     var chev=document.createElement('span');
     chev.className='brand-chevron';
+    chev.style.cssText='cursor:pointer;padding:2px 4px;border-radius:3px;flex-shrink:0;';
     chev.textContent=isOpen?'▾':'▸';
 
     var dot=document.createElement('span');
@@ -1048,23 +1050,14 @@ function renderBrandTree(){
     dot.style.background=brand.color;
 
     var lbl=document.createElement('span');
-    lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;';
     lbl.textContent=brand.name;
 
     var cnt=document.createElement('span');
     cnt.className='brand-cnt';
     cnt.textContent=brandCount||'';
 
-    bRow.appendChild(chev);bRow.appendChild(dot);bRow.appendChild(lbl);bRow.appendChild(cnt);
-    bRow.onclick=(function(b,c,l){return function(e){
-      // Toggle expand/collapse on chevron click; select brand on label click
-      collapsedBrands[b.key]=!c.classList.contains('open');
-      c.classList.toggle('open');
-      l.textContent=c.classList.contains('open')?'▾':'▸';
-      selectBrand(b.key);
-    };})(brand,entWrap,chev);
-
-    // Entity list
+    // Entity list (starts collapsed by default)
     var entWrap=document.createElement('div');
     entWrap.className='entity-list-wrap'+(isOpen?' open':'');
 
@@ -1078,15 +1071,43 @@ function renderBrandTree(){
       entWrap.appendChild(eRow);
     });
 
-    // Fix onclick closure: re-assign after entWrap is created
-    bRow.onclick=(function(b,ew,ch){return function(){
-      ew.classList.toggle('open');
-      ch.textContent=ew.classList.contains('open')?'▾':'▸';
-      selectBrand(b.key);
-    };})(brand,entWrap,chev);
+    // Chevron: toggle only (no filter change)
+    chev.onclick=(function(bk,ew,ch){return function(e){
+      e.stopPropagation();
+      var nowOpen=ew.classList.toggle('open');
+      ch.textContent=nowOpen?'▾':'▸';
+      collapsedBrands[bk]=nowOpen;
+    };})(brand.key,entWrap,chev);
 
+    // Label: select brand + expand if collapsed
+    lbl.onclick=(function(bk,ew,ch){return function(e){
+      e.stopPropagation();
+      if(!ew.classList.contains('open')){
+        ew.classList.add('open');ch.textContent='▾';collapsedBrands[bk]=true;
+      }
+      selectBrand(bk);
+    };})(brand.key,entWrap,chev);
+
+    // Clicking the row itself (not chev/lbl) also selects
+    bRow.onclick=(function(bk,ew,ch){return function(){
+      if(!ew.classList.contains('open')){
+        ew.classList.add('open');ch.textContent='▾';collapsedBrands[bk]=true;
+      }
+      selectBrand(bk);
+    };})(brand.key,entWrap,chev);
+
+    bRow.appendChild(chev);bRow.appendChild(dot);bRow.appendChild(lbl);bRow.appendChild(cnt);
     bl.appendChild(bRow);bl.appendChild(entWrap);
   });
+
+  // Manage brands button at bottom
+  var mgBtn=document.createElement('div');
+  mgBtn.style.cssText='padding:8px 12px 4px 28px;cursor:pointer;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;';
+  mgBtn.innerHTML='<span>⚙</span><span>Manage brands & entities</span>';
+  mgBtn.onmouseover=function(){this.style.color='var(--accent)';};
+  mgBtn.onmouseout=function(){this.style.color='var(--text3)';};
+  mgBtn.onclick=function(){openBrandManager();};
+  bl.appendChild(mgBtn);
 }
 
 function selectBrandAll(){
@@ -1102,6 +1123,111 @@ function selectBrand(key){
 function selectEntity(brandKey,entityName){
   curBrandFilter=brandKey;curEntityFilter=entityName;
   document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
+  renderBrandTree();renderContracts();
+}
+
+// ── Brand Manager ───────────────────────────────────────
+var bmDraft=[]; // working copy while modal is open
+
+function openBrandManager(){
+  bmDraft=JSON.parse(JSON.stringify(BRANDS));
+  renderBrandManager();
+  openModal('modal-brand-manager');
+}
+
+function renderBrandManager(){
+  var el=q('bm-list');if(!el)return;
+  el.innerHTML='';
+  bmDraft.forEach(function(brand,bi){
+    var card=document.createElement('div');
+    card.style.cssText='border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);';
+
+    // Brand header row
+    var hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);';
+
+    // Color swatch (click to cycle)
+    var swatch=document.createElement('div');
+    swatch.style.cssText='width:16px;height:16px;border-radius:50%;background:'+brand.color+';cursor:pointer;flex-shrink:0;border:2px solid var(--border);';
+    swatch.title='Click to change colour';
+    swatch.onclick=(function(bi2){return function(){
+      var idx=(BRAND_COLORS.indexOf(bmDraft[bi2].color)+1)%BRAND_COLORS.length;
+      bmDraft[bi2].color=BRAND_COLORS[idx];renderBrandManager();
+    };})(bi);
+
+    // Brand name input
+    var nameIn=document.createElement('input');
+    nameIn.type='text';nameIn.value=brand.name;
+    nameIn.style.cssText='flex:1;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--text);outline:none;min-width:0;';
+    nameIn.onchange=(function(bi2){return function(){bmDraft[bi2].name=this.value;};})(bi);
+
+    // Delete brand
+    var delBrand=document.createElement('button');
+    delBrand.className='btn btn-ghost';delBrand.textContent='Delete brand';
+    delBrand.style.cssText='font-size:11px;padding:2px 8px;color:var(--red);';
+    delBrand.onclick=(function(bi2){return function(){
+      if(confirm('Delete brand "'+bmDraft[bi2].name+'"?')){bmDraft.splice(bi2,1);renderBrandManager();}
+    };})(bi);
+
+    hdr.appendChild(swatch);hdr.appendChild(nameIn);hdr.appendChild(delBrand);
+    card.appendChild(hdr);
+
+    // Entity rows
+    var entList=document.createElement('div');
+    entList.style.cssText='padding:6px 10px;display:flex;flex-direction:column;gap:4px;';
+    brand.entities.forEach(function(ent,ei){
+      var eRow=document.createElement('div');
+      eRow.style.cssText='display:flex;align-items:center;gap:6px;';
+
+      var flagIn=document.createElement('input');
+      flagIn.type='text';flagIn.value=ent.flag;flagIn.placeholder='🏳';
+      flagIn.style.cssText='width:32px;border:1px solid var(--border);border-radius:4px;padding:3px 4px;font-size:14px;text-align:center;background:var(--surface2);';
+      flagIn.onchange=(function(bi2,ei2){return function(){bmDraft[bi2].entities[ei2].flag=this.value;};})(bi,ei);
+
+      var nameIn2=document.createElement('input');
+      nameIn2.type='text';nameIn2.value=ent.name;nameIn2.placeholder='Entity name';
+      nameIn2.style.cssText='flex:1;border:1px solid var(--border);border-radius:4px;padding:3px 7px;font-size:12px;background:var(--surface2);color:var(--text);';
+      nameIn2.onchange=(function(bi2,ei2){return function(){bmDraft[bi2].entities[ei2].name=this.value;};})(bi,ei);
+
+      var delEnt=document.createElement('button');
+      delEnt.textContent='✕';delEnt.style.cssText='border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;padding:2px 4px;';
+      delEnt.onclick=(function(bi2,ei2){return function(){bmDraft[bi2].entities.splice(ei2,1);renderBrandManager();};})(bi,ei);
+
+      eRow.appendChild(flagIn);eRow.appendChild(nameIn2);eRow.appendChild(delEnt);
+      entList.appendChild(eRow);
+    });
+
+    // Add entity row
+    var addEnt=document.createElement('button');
+    addEnt.className='btn btn-ghost';addEnt.textContent='＋ Add entity';
+    addEnt.style.cssText='font-size:11px;padding:3px 8px;margin-top:2px;align-self:flex-start;';
+    addEnt.onclick=(function(bi2){return function(){
+      bmDraft[bi2].entities.push({flag:'🏳',name:''});renderBrandManager();
+    };})(bi);
+    entList.appendChild(addEnt);
+
+    card.appendChild(entList);
+    el.appendChild(card);
+  });
+}
+
+function addBrand(){
+  var key='brand_'+Date.now();
+  var color=BRAND_COLORS[bmDraft.length%BRAND_COLORS.length];
+  bmDraft.push({key:key,name:'New Brand',color:color,entities:[]});
+  renderBrandManager();
+}
+
+function saveBrands(){
+  // Flush any un-blurred input values
+  q('bm-list').querySelectorAll('input').forEach(function(inp){inp.dispatchEvent(new Event('change'));});
+  // Filter out blank brand names
+  BRANDS=bmDraft.filter(function(b){return b.name.trim();}).map(function(b){
+    return {key:b.key,name:b.name.trim(),color:b.color,
+      entities:b.entities.filter(function(e){return e.name.trim();}).map(function(e){return {flag:e.flag||'🏳',name:e.name.trim()};})};
+  });
+  save(SK.BRANDS,BRANDS);
+  closeModal('modal-brand-manager');
   renderBrandTree();renderContracts();
 }
 
@@ -3690,6 +3816,22 @@ fbLoadAll().then(function(){
     <div style="font-size:32px;margin-bottom:10px">🔄</div>
     <div style="font-size:15px;font-weight:600;color:#1c2a1f">正在同步数据...</div>
     <div style="font-size:12px;color:#8a9e92;margin-top:5px">连接 Firebase 中</div>
+  </div>
+</div>
+<!-- Brand Manager Modal -->
+<div class="overlay" id="modal-brand-manager">
+  <div class="modal" style="max-width:560px;width:95%;max-height:85vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <div class="modal-title">⚙ Manage Brands &amp; Entities</div>
+      <span class="modal-close" onclick="closeModal('modal-brand-manager')">×</span>
+    </div>
+    <div id="bm-list" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;"></div>
+    <div class="modal-footer" style="gap:8px;">
+      <button class="btn btn-ghost" onclick="addBrand()">＋ Add Brand</button>
+      <div style="flex:1;"></div>
+      <button class="btn btn-ghost" onclick="closeModal('modal-brand-manager')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBrands()">Save</button>
+    </div>
   </div>
 </div>
 </body>
