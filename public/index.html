@@ -147,12 +147,12 @@ textarea.form-input{resize:vertical;}
 .cal-day.today{color:var(--accent);font-weight:700;background:var(--al);}
 .cal-day.has-event::after{content:'';position:absolute;bottom:2px;width:4px;height:4px;border-radius:50%;background:var(--red);}
 .section-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;padding-bottom:8px;border-top:none;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-/* ── Brand tree ────────────────────────────────────── */
+/* ── Brand tree (nested under Contract List nav item) ── */
 .brand-tree-header{padding:10px 12px 4px;font-size:10px;letter-spacing:2px;color:var(--text3);font-weight:600;text-transform:uppercase;flex-shrink:0;}
-.brand-all-row{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;margin:0 0 2px;}
+.brand-all-row{display:flex;align-items:center;gap:7px;padding:5px 10px 5px 28px;font-size:12px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;margin:0;}
 .brand-all-row:hover{background:var(--surface2);color:var(--text);}
 .brand-all-row.active{background:var(--al);color:var(--accent);font-weight:600;border-left-color:var(--accent);}
-.brand-row{display:flex;align-items:center;gap:7px;padding:6px 10px;font-size:12px;font-weight:500;color:var(--text);cursor:pointer;border-left:2px solid transparent;user-select:none;}
+.brand-row{display:flex;align-items:center;gap:7px;padding:5px 10px 5px 28px;font-size:12px;font-weight:500;color:var(--text);cursor:pointer;border-left:2px solid transparent;user-select:none;}
 .brand-row:hover{background:var(--surface2);}
 .brand-row.active{background:var(--al);border-left-color:var(--accent);}
 .brand-chevron{font-size:10px;color:var(--text3);transition:transform .15s;flex-shrink:0;width:10px;display:inline-block;}
@@ -160,7 +160,7 @@ textarea.form-input{resize:vertical;}
 .brand-cnt{margin-left:auto;font-size:10px;color:var(--text3);flex-shrink:0;}
 .entity-list-wrap{display:none;}
 .entity-list-wrap.open{display:block;}
-.entity-row{display:flex;align-items:center;gap:5px;padding:4px 10px 4px 26px;font-size:11px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;}
+.entity-row{display:flex;align-items:center;gap:5px;padding:4px 10px 4px 38px;font-size:11px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;}
 .entity-row:hover{background:var(--surface2);color:var(--text);}
 .entity-row.active{background:var(--al);color:var(--accent);font-weight:600;border-left-color:var(--accent);}
 .entity-name-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
@@ -177,22 +177,21 @@ textarea.form-input{resize:vertical;}
 <body>
 <aside class="sidebar">
   <div class="logo"><div class="logo-tag">CMS</div><div class="logo-name">Contracts</div></div>
-  <nav class="nav" style="flex-shrink:0;padding-bottom:0;">
+  <nav class="nav" style="flex:1;overflow-y:auto;padding-bottom:8px;">
     <div class="nav-item active" data-page="contracts"><span class="ni">📄</span>Contract List</div>
+    <!-- Brand tree — nested under Contract List, shown when contracts page active -->
+    <div id="brand-tree" style="display:flex;flex-direction:column;">
+      <div class="brand-all-row active" id="brand-all-row" onclick="selectBrandAll()">
+        <span style="font-size:11px;color:var(--text3);">◻</span>
+        <span style="flex:1;">All contracts</span>
+        <span class="brand-cnt" id="brand-all-count">0</span>
+      </div>
+      <div id="brand-list"></div>
+    </div>
     <div class="nav-item" data-page="templates"><span class="ni">📁</span>Templates</div>
     <div class="nav-item" data-page="calendar"><span class="ni">📅</span>Expiry Calendar<span class="nav-badge" id="badge-expiring"></span></div>
     <div class="nav-item" data-page="alerts"><span class="ni">🔔</span>Reminders<span class="nav-badge" id="badge-urgent"></span></div>
   </nav>
-  <!-- Brand tree — shown when Contract List is active -->
-  <div id="brand-tree" style="flex:1;overflow-y:auto;border-top:1px solid var(--border);display:flex;flex-direction:column;">
-    <div class="brand-tree-header">BRANDS</div>
-    <div class="brand-all-row active" id="brand-all-row" onclick="selectBrandAll()">
-      <span style="font-size:12px;color:var(--text3);">◻</span>
-      <span style="flex:1;">All contracts</span>
-      <span class="brand-cnt" id="brand-all-count">0</span>
-    </div>
-    <div id="brand-list"></div>
-  </div>
   <div class="sidebar-footer">
     <div class="user-card">
       <div class="avatar">R</div>
