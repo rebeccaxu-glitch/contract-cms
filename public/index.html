@@ -3837,164 +3837,84 @@ var driveResults = [];    // AI-recognized results
 var diScanning = false;
 
 function openDriveImport(){
-  driveFiles = [];
-  driveResults = [];
-  q('di-tbody').innerHTML = '';
-  q('di-file-list').style.display = 'none';
-  q('di-empty').style.display = 'block';
-  q('di-progress').style.display = 'none';
-  q('di-import-btn').style.display = 'none';
-  q('di-summary').textContent = '';
-  q('di-scan-btn').disabled = false;
-  q('di-scan-btn').textContent = '🔄 扫描文件';
   openModal('modal-drive-import');
+  // Load last scan status
+  fetch('/api/drive/status').then(function(r){ return r.json(); }).then(function(d){
+    var el = q('di-last-scan');
+    if(el) el.textContent = d.lastScan ? ('Last scan: ' + new Date(d.lastScan).toLocaleString()) : 'Never scanned';
+    var sumEl = q('di-last-summary');
+    if(sumEl && d.lastScan) sumEl.textContent = (d.added||0) + ' added, ' + (d.drafts||0) + ' reviewing, ' + (d.errors||0) + ' errors';
+  }).catch(function(){});
 }
 
 function startDriveScan(){
   if(diScanning) return;
   diScanning = true;
-  q('di-scan-btn').disabled = true;
-  q('di-scan-btn').textContent = '⏳ 扫描中...';
-  q('di-empty').style.display = 'none';
-  q('di-progress').style.display = 'block';
-  q('di-prog-text').textContent = '正在读取 Google Drive 文件夹...';
-  q('di-prog-count').textContent = '';
-  q('di-bar').style.width = '5%';
+  var btn = q('di-scan-btn');
+  var prog = q('di-progress');
+  var empty = q('di-empty');
+  var result = q('di-result');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Scanning...'; }
+  if(prog) prog.style.display='block';
+  if(empty) empty.style.display='none';
+  if(result) result.style.display='none';
+  q('di-bar').style.width='5%';
+  q('di-prog-text').textContent='Connecting to Google Drive...';
 
-  // Call Anthropic API to list Drive folder files
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      mcp_servers: [{
-        type: 'url',
-        url: 'https://drivemcp.googleapis.com/mcp/v1',
-        name: 'google-drive'
-      }],
-      messages: [{
-        role: 'user',
-        content: 'List all PDF and Word files (mimeType contains pdf or word or document) in Google Drive folder with id "' + DRIVE_FOLDER_ID + '". Return ONLY a JSON array with objects {id, name, mimeType}. No markdown, no explanation.'
-      }]
-    })
-  })
+  // Animate progress bar while waiting
+  var pct=5;
+  var animTimer=setInterval(function(){
+    pct=Math.min(pct+2,85);
+    q('di-bar').style.width=pct+'%';
+  },800);
+
+  fetch('/api/drive/scan',{method:'POST',headers:{'Content-Type':'application/json'}})
   .then(function(r){ return r.json(); })
   .then(function(data){
-    // Parse file list from response
-    var text = data.content
-      ? data.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('')
-      : '';
-    try {
-      var clean = text.replace(/```json|```/g,'').trim();
-      driveFiles = JSON.parse(clean);
-    } catch(e) {
-      // Try to extract JSON array from text
-      var m = text.match(/\[[\s\S]*\]/);
-      if(m) driveFiles = JSON.parse(m[0]);
-      else { alert('无法读取文件列表：' + text.slice(0,200)); diScanning=false; q('di-scan-btn').disabled=false; q('di-scan-btn').textContent='🔄 扫描文件'; return; }
+    clearInterval(animTimer);
+    q('di-bar').style.width='100%';
+    diScanning=false;
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Scan Again'; }
+    if(prog) prog.style.display='none';
+
+    if(!data.ok){ throw new Error(data.error||'Scan failed'); }
+
+    // Show result
+    var res = q('di-result');
+    if(res){
+      res.style.display='block';
+      res.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">✅ Scan complete</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--accent);">'+(data.added||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Added</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--yellow);">'+(data.drafts||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Reviewing</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text3);">'+(data.skipped||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Skipped</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+(data.errors||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
+        +'</div>';
     }
+    // Update last scan label
+    var el=q('di-last-scan'); if(el) el.textContent='Last scan: '+new Date().toLocaleString();
 
-    if(!driveFiles.length){
-      q('di-prog-text').textContent = '文件夹为空，请先上传合同文件到 Google Drive';
-      q('di-bar').style.width = '100%';
-      diScanning = false;
-      q('di-scan-btn').disabled = false;
-      q('di-scan-btn').textContent = '🔄 重新扫描';
-      return;
+    // Refresh contract list from Firebase if new contracts were added
+    if((data.added||0)+(data.drafts||0)>0){
+      fbLoadAll().then(function(){
+        renderDashboard();renderContracts();renderGroupList();updateNavCounts();
+      }).catch(function(){});
     }
-
-    // Show file list
-    renderDriveFileRows();
-    q('di-bar').style.width = '10%';
-    q('di-prog-text').textContent = 'AI 识别中...';
-
-    // Process files one by one
-    driveResults = driveFiles.map(function(f){ return {file:f, status:'waiting', data:null}; });
-    renderDriveFileRows();
-    processNextDriveFile(0);
   })
   .catch(function(err){
-    alert('读取 Drive 失败：' + err.message);
-    diScanning = false;
-    q('di-scan-btn').disabled = false;
-    q('di-scan-btn').textContent = '🔄 扫描文件';
-  });
-}
-
-function processNextDriveFile(idx){
-  if(idx >= driveResults.length){
-    // All done
-    q('di-bar').style.width = '100%';
-    q('di-prog-text').textContent = '✅ 识别完成！';
-    var doneCount = driveResults.filter(function(r){return r.status==='done';}).length;
-    q('di-prog-count').textContent = doneCount + '/' + driveResults.length + ' 份识别成功';
-    q('di-import-btn').style.display = 'inline-flex';
-    q('di-import-btn').textContent = '✅ 全部导入 (' + doneCount + '份)';
-    q('di-summary').textContent = '共 ' + driveResults.length + ' 份文件，' + doneCount + ' 份识别成功';
-    diScanning = false;
-    q('di-scan-btn').disabled = false;
-    q('di-scan-btn').textContent = '🔄 重新扫描';
-    // Update step
-    q('di-s2num').style.background = '#4caf6e';
-    q('di-s2num').textContent = '✓';
-    q('di-s2lbl').style.color = '#4caf6e';
-    q('di-s3num').style.background = '#1c2a1f';
-    q('di-s3num').style.color = '#fff';
-    q('di-s3lbl').style.color = '#1c2a1f';
-    return;
-  }
-
-  driveResults[idx].status = 'processing';
-  renderDriveFileRows();
-
-  var pct = Math.round(10 + (idx / driveResults.length) * 85);
-  q('di-bar').style.width = pct + '%';
-  q('di-prog-count').textContent = (idx+1) + '/' + driveResults.length;
-
-  // Call AI to read and recognize this file
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      mcp_servers: [{
-        type: 'url',
-        url: 'https://drivemcp.googleapis.com/mcp/v1',
-        name: 'google-drive'
-      }],
-      messages: [{
-        role: 'user',
-        content: 'Read the Google Drive file with id "' + driveResults[idx].file.id + '" and extract contract information. Return ONLY a JSON object with these fields: {"name":"合同名称","party":"对方当事人","type":"合同类型(服务协议/采购合同/租赁合同/劳务合同/保密协议/其他)","start":"签署日期YYYY-MM-DD or empty","end":"到期日期YYYY-MM-DD or empty","amount":"合同金额 or empty","notes":"简短备注 or empty"}. No markdown, no explanation.'
-      }]
-    })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    var text = data.content
-      ? data.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('')
-      : '';
-    try {
-      var clean = text.replace(/```json|```/g,'').trim();
-      var m = clean.match(/\{[\s\S]*\}/);
-      var parsed = JSON.parse(m ? m[0] : clean);
-      driveResults[idx].status = 'done';
-      driveResults[idx].data = parsed;
-    } catch(e) {
-      driveResults[idx].status = 'error';
-      driveResults[idx].data = {name: driveResults[idx].file.name.replace(/\.(pdf|docx|doc)$/i,''), party:'', type:'其他', start:'', end:'', amount:'', notes:''};
+    clearInterval(animTimer);
+    diScanning=false;
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Scan Drive'; }
+    if(prog) prog.style.display='none';
+    var res=q('di-result');
+    if(res){
+      res.style.display='block';
+      res.innerHTML='<div style="color:var(--red);font-size:13px;">❌ Scan failed: '+(err.message||err)+'</div>';
     }
-    renderDriveFileRows();
-    setTimeout(function(){ processNextDriveFile(idx+1); }, 500);
-  })
-  .catch(function(){
-    driveResults[idx].status = 'error';
-    driveResults[idx].data = {name: driveResults[idx].file.name.replace(/\.(pdf|docx|doc)$/i,''), party:'', type:'其他', start:'', end:'', amount:'', notes:''};
-    renderDriveFileRows();
-    setTimeout(function(){ processNextDriveFile(idx+1); }, 500);
   });
 }
+
+function processNextDriveFile(){ /* replaced by startDriveScan() */ }
 
 function renderDriveFileRows(){
   var tb = q('di-tbody');
@@ -4802,74 +4722,40 @@ function startApp(){
 </script>
 <!-- Google Drive Import Modal -->
 <div id="modal-drive-import" class="overlay">
-  <div class="modal" style="max-width:720px;width:95%;max-height:85vh;overflow-y:auto">
+  <div class="modal" style="max-width:480px;width:95%;">
     <div class="modal-header">
-      <div class="modal-title">📂 从 Google Drive 导入合同</div>
+      <div class="modal-title">📂 Drive Import</div>
       <button class="modal-close" onclick="closeModal('modal-drive-import')">×</button>
     </div>
-    <!-- Steps -->
-    <div id="di-steps" style="display:flex;align-items:center;margin-bottom:20px">
-      <div id="di-step1" style="display:flex;align-items:center;gap:6px">
-        <div id="di-s1num" style="width:24px;height:24px;border-radius:50%;background:#4caf6e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">✓</div>
-        <span style="font-size:11px;font-weight:600;color:#4caf6e">连接文件夹</span>
-      </div>
-      <div style="flex:1;height:1px;background:#e8f0e9;margin:0 10px"></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <div id="di-s2num" style="width:24px;height:24px;border-radius:50%;background:#1c2a1f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">2</div>
-        <span id="di-s2lbl" style="font-size:11px;font-weight:600;color:#1c2a1f">AI 识别</span>
-      </div>
-      <div style="flex:1;height:1px;background:#e8f0e9;margin:0 10px"></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <div id="di-s3num" style="width:24px;height:24px;border-radius:50%;background:#f0f4f1;color:#8a9e92;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">3</div>
-        <span id="di-s3lbl" style="font-size:11px;font-weight:600;color:#8a9e92">确认导入</span>
-      </div>
-    </div>
     <!-- Folder info -->
-    <div style="background:#f8faf8;border:1.5px solid #d8ead9;border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <span style="font-size:22px">📁</span>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600;color:#1c2a1f">合同管理</div>
-        <div style="font-size:11px;color:#8a9e92;margin-top:2px">Google Drive · 自动连接</div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <span style="font-size:22px;">📁</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">Contracts for AI training</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;" id="di-last-scan">Checking last scan...</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:1px;" id="di-last-summary"></div>
       </div>
-      <button class="btn btn-primary" onclick="startDriveScan()" id="di-scan-btn" style="font-size:12px;padding:7px 14px">🔄 扫描文件</button>
+      <button class="btn btn-primary" onclick="startDriveScan()" id="di-scan-btn" style="font-size:12px;padding:7px 14px;flex-shrink:0;">🔄 Scan Drive</button>
     </div>
-    <!-- Progress -->
-    <div id="di-progress" style="display:none;background:#f0f9f3;border:1.5px solid #c8e6c9;border-radius:8px;padding:14px 16px;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:600;color:#2e7d32;margin-bottom:8px">🤖 AI 正在识别合同信息...</div>
-      <div style="background:#c8e6c9;border-radius:10px;height:6px;margin-bottom:6px">
-        <div id="di-bar" style="background:#4caf6e;border-radius:10px;height:6px;width:0%;transition:width .3s"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#4caf6e">
-        <span id="di-prog-text">准备中...</span>
-        <span id="di-prog-count"></span>
+    <!-- Progress bar -->
+    <div id="di-progress" style="display:none;margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px;" id="di-prog-text">Scanning...</div>
+      <div style="background:var(--border);border-radius:10px;height:6px;">
+        <div id="di-bar" style="background:var(--accent);border-radius:10px;height:6px;width:0%;transition:width .4s;"></div>
       </div>
     </div>
-    <!-- File list -->
-    <div id="di-file-list" style="border:1px solid #e8f0e9;border-radius:8px;overflow:hidden;display:none;max-height:320px;overflow-y:auto">
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:#f8faf8">
-            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">文件名 / 识别结果</th>
-            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">对方当事人</th>
-            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">到期日期</th>
-            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">状态</th>
-            <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:#8a9e92;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid #e8f0e9">操作</th>
-          </tr>
-        </thead>
-        <tbody id="di-tbody"></tbody>
-      </table>
+    <!-- Result -->
+    <div id="di-result" style="display:none;margin-bottom:16px;"></div>
+    <!-- Info box -->
+    <div id="di-empty" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:12px;color:var(--text3);line-height:1.6;">
+      The scanner will automatically:<br>
+      • Detect new files not yet in the system<br>
+      • Extract contract details using AI<br>
+      • Add signed contracts as <strong>Active</strong>, drafts as <strong>Reviewing</strong><br>
+      • Run automatically every day at 9am SGT
     </div>
-    <!-- Empty state -->
-    <div id="di-empty" style="text-align:center;padding:40px;color:#8a9e92;font-size:13px">
-      点击「扫描文件」读取 Google Drive 文件夹里的合同
-    </div>
-    <!-- Bottom actions -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
-      <div id="di-summary" style="font-size:12px;color:#8a9e92"></div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-ghost" onclick="closeModal('modal-drive-import')">取消</button>
-        <button class="btn btn-primary" id="di-import-btn" style="display:none" onclick="confirmDriveImport()">✅ 全部导入</button>
-      </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-drive-import')">Close</button>
     </div>
   </div>
 </div>
