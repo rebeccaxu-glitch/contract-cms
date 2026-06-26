@@ -169,6 +169,12 @@ textarea.form-input{resize:vertical;}
 .cal-list-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;transition:background .1s;margin-bottom:2px;}
 .cal-list-row:hover{background:var(--surface2);}
 .section-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;padding-bottom:8px;border-top:none;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.toggle-wrap{position:relative;width:36px;height:20px;flex-shrink:0;cursor:pointer;}
+.toggle-wrap input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-slider{position:absolute;inset:0;border-radius:20px;background:var(--border);transition:background .2s;}
+.toggle-slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle-wrap input:checked+.toggle-slider{background:var(--accent);}
+.toggle-wrap input:checked+.toggle-slider::before{transform:translateX(16px);}
 /* ── Brand tree (nested under Contract List nav item) ── */
 .brand-tree-header{padding:10px 12px 4px;font-size:10px;letter-spacing:2px;color:var(--text3);font-weight:600;text-transform:uppercase;flex-shrink:0;}
 .brand-all-row{display:flex;align-items:center;gap:7px;padding:5px 10px 5px 28px;font-size:12px;color:var(--text2);cursor:pointer;border-left:2px solid transparent;margin:0;}
@@ -488,24 +494,9 @@ textarea.form-input{resize:vertical;}
 
 <!-- ALERTS -->
     <div class="page" id="page-alerts">
-      <div style="max-width:640px">
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-title">提醒规则</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
-              <div><div style="font-size:13px;font-weight:500">合同到期前 60 天</div><div style="font-size:12px;color:var(--text3);margin-top:2px">标记为「即将到期」并在控制台提示</div></div>
-              <span style="background:var(--al);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600">已开启</span>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
-              <div><div style="font-size:13px;font-weight:500">合同到期前 7 天</div><div style="font-size:12px;color:var(--text3);margin-top:2px">侧边栏红色角标紧急提示</div></div>
-              <span style="background:var(--al);color:var(--accent);font-size:11px;padding:2px 8px;border-radius:8px;font-weight:600">已开启</span>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">待处理提醒 <span id="alerts-count" style="font-size:11px;background:var(--rl);color:var(--red);padding:1px 6px;border-radius:8px;font-weight:700"></span></div>
-          <div id="alerts-list"></div>
-        </div>
+      <div style="max-width:680px;display:flex;flex-direction:column;gap:14px;">
+        <div class="card" id="alert-rules-card"></div>
+        <div class="card" id="alert-list-card"></div>
       </div>
     </div>
 
@@ -919,7 +910,7 @@ function openFromStorage(storageUrl, fileType, fileName){
 // ═══════════════════════════════════════════════════════
 
 // ── Storage keys ──────────────────────────────────────
-var SK = { C:'cms_c', E:'cms_e', T:'cms_t', M:'cms_m', BRANDS:'cms_brands_v1', IC_TYPES:'cms_ic_types_v1' };
+var SK = { C:'cms_c', E:'cms_e', T:'cms_t', M:'cms_m', BRANDS:'cms_brands_v1', IC_TYPES:'cms_ic_types_v1', RULES:'cms_alert_rules_v1' };
 
 // ── Default data ───────────────────────────────────────
 var DEF_C = [
@@ -1027,6 +1018,13 @@ var IC_TYPES_DEFAULT=[
   {key:'cost',name:'Cost allocation'}
 ];
 var IC_TYPES=(function(){var s=load(SK.IC_TYPES);return(s&&s.length)?s:JSON.parse(JSON.stringify(IC_TYPES_DEFAULT));})();
+
+var ALERT_RULES_DEFAULT=[
+  {key:'r7',  days:7,  label:'紧急提醒',    color:'red',    icon:'🚨', enabled:true},
+  {key:'r30', days:30, label:'即将到期',    color:'orange', icon:'⚠️', enabled:true},
+  {key:'r60', days:60, label:'提前预警',    color:'yellow', icon:'📅', enabled:true}
+];
+var ALERT_RULES=(function(){var s=load(SK.RULES);return(s&&s.length)?s:JSON.parse(JSON.stringify(ALERT_RULES_DEFAULT));})();
 
 // ── State ──────────────────────────────────────────────
 var C, E, T, M;
@@ -1271,7 +1269,7 @@ function navTo(pid){
   }
   if(pid==='entities')renderGroupList();
   if(pid==='templates')renderTplList();
-  if(pid==='alerts')renderAlerts();
+  if(pid==='alerts'){renderAlertRules();renderAlertList();}
   if(pid==='timeline')renderTimeline();
   if(pid==='calendar')renderCalendar();
 }
@@ -3511,41 +3509,176 @@ function renderCalExpiring(selectedDay){
 }
 
 // ── Alerts (dynamic, from real contract data) ────────────
+var _COLOR_MAP={red:'var(--red)',orange:'var(--orange)',yellow:'var(--yellow)',gray:'var(--text3)'};
+var _BG_MAP={red:'var(--rl)',orange:'var(--ol)',yellow:'var(--yl)',gray:'var(--surface2)'};
+
 function renderAlerts(){
-  var el = q('alerts-list'); if(!el) return;
-  el.innerHTML='';
+  renderAlertRules();
+  renderAlertList();
+}
 
-  // Get contracts expiring within 30 days
-  var urgent = C.filter(function(c){
-    var d=daysTo(c.end);
-    return d!==null && d>=0 && d<=30;
-  }).sort(function(a,b){return new Date(a.end)-new Date(b.end);});
+function renderAlertRules(){
+  var card=q('alert-rules-card');if(!card)return;
+  card.innerHTML='';
 
-  // Update count badge
-  var countEl = q('alerts-count');
-  if(countEl){ countEl.textContent=urgent.length?urgent.length:''; countEl.style.display=urgent.length?'':'none'; }
+  // Header
+  var hdr=mk('div');hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;';
+  var title=mk('span','','提醒规则');title.style.cssText='font-size:14px;font-weight:700;';
+  var addBtn=mk('button','btn btn-ghost','＋ 新建规则');addBtn.style.fontSize='12px';
+  addBtn.onclick=function(){
+    ALERT_RULES.push({key:'r'+Date.now(),days:90,label:'自定义提醒',color:'gray',icon:'🔔',enabled:true});
+    save(SK.RULES,ALERT_RULES);renderAlertRules();renderAlertList();
+  };
+  hdr.appendChild(title);hdr.appendChild(addBtn);card.appendChild(hdr);
 
-  if(!urgent.length){
-    var em = mk('div','','近期无需处理的提醒，所有合同状态正常 ✅');
-    em.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px';
-    el.appendChild(em); return;
+  var list=mk('div');list.style.cssText='display:flex;flex-direction:column;gap:8px;';
+
+  ALERT_RULES.forEach(function(rule,ri){
+    var col=_COLOR_MAP[rule.color]||'var(--text3)';
+    var bg=_BG_MAP[rule.color]||'var(--surface2)';
+    var mc=C?C.filter(function(c){var d=daysTo(c.end);return d!==null&&d>=0&&d<=rule.days;}).length:0;
+
+    var row=mk('div');
+    row.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);transition:opacity .2s;opacity:'+(rule.enabled?'1':'.5')+';';
+
+    var icon=mk('span','',rule.icon);icon.style.cssText='font-size:15px;flex-shrink:0;';
+
+    // Editable days number
+    var daysWrap=mk('div');daysWrap.style.cssText='display:flex;align-items:center;gap:4px;flex-shrink:0;';
+    var daysNum=mk('span','',''+rule.days);
+    daysNum.style.cssText='font-size:16px;font-weight:700;font-family:JetBrains Mono,monospace;color:'+col+';cursor:pointer;padding:0 2px;border-radius:3px;';
+    daysNum.title='点击修改天数';
+    daysNum.onclick=(function(ri2,dn){return function(e){
+      e.stopPropagation();
+      var inp=document.createElement('input');inp.type='number';inp.min='1';inp.max='365';inp.value=ALERT_RULES[ri2].days;
+      inp.style.cssText='width:52px;font-size:15px;font-weight:700;font-family:JetBrains Mono,monospace;border:1px solid var(--accent);border-radius:3px;padding:1px 4px;color:'+col+';background:var(--surface2);outline:none;';
+      daysWrap.replaceChild(inp,dn);inp.focus();inp.select();
+      function done(){var v=parseInt(inp.value);if(v>0&&v<=999)ALERT_RULES[ri2].days=v;save(SK.RULES,ALERT_RULES);renderAlertRules();renderAlertList();}
+      inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=ALERT_RULES[ri2].days;inp.blur();}};
+    };})(ri,daysNum);
+    var daysLbl=mk('span','','天内到期');daysLbl.style.cssText='font-size:12px;color:var(--text2);white-space:nowrap;';
+    daysWrap.appendChild(daysNum);daysWrap.appendChild(daysLbl);
+
+    // Editable label
+    var lbl=mk('span','',rule.label);
+    lbl.style.cssText='flex:1;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;';
+    lbl.title='点击修改名称';
+    lbl.onclick=(function(ri2,l){return function(e){
+      e.stopPropagation();
+      var inp=document.createElement('input');inp.type='text';inp.value=ALERT_RULES[ri2].label;
+      inp.style.cssText='flex:1;font-size:13px;border:1px solid var(--accent);border-radius:3px;padding:2px 6px;background:var(--surface);color:var(--text);outline:none;width:100%;';
+      row.replaceChild(inp,l);inp.focus();inp.select();
+      function done(){var v=inp.value.trim();if(v)ALERT_RULES[ri2].label=v;save(SK.RULES,ALERT_RULES);renderAlertRules();}
+      inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();};
+    };})(ri,lbl);
+
+    // Match count badge
+    var badge=mk('span','',mc?mc+'份':'');
+    badge.style.cssText='font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;flex-shrink:0;'+(mc?'background:'+bg+';color:'+col+';':'color:var(--border);');
+
+    // Toggle switch
+    var tglWrap=mk('label','toggle-wrap');
+    var tglInp=document.createElement('input');tglInp.type='checkbox';tglInp.checked=rule.enabled;
+    tglInp.onchange=(function(ri2){return function(){
+      ALERT_RULES[ri2].enabled=this.checked;save(SK.RULES,ALERT_RULES);
+      renderAlertRules();renderAlertList();updateNavCounts();
+    };})(ri);
+    var tglSlider=mk('span','toggle-slider');
+    tglWrap.appendChild(tglInp);tglWrap.appendChild(tglSlider);
+
+    // Delete
+    var delBtn=mk('span','','×');
+    delBtn.style.cssText='font-size:15px;color:var(--text3);cursor:pointer;flex-shrink:0;padding:0 2px;line-height:1;';
+    delBtn.title='删除此规则';
+    delBtn.onclick=(function(ri2){return function(e){
+      e.stopPropagation();
+      if(confirm('删除规则「'+ALERT_RULES[ri2].label+'」？')){
+        ALERT_RULES.splice(ri2,1);save(SK.RULES,ALERT_RULES);
+        renderAlertRules();renderAlertList();updateNavCounts();
+      }
+    };})(ri);
+
+    row.appendChild(icon);row.appendChild(daysWrap);row.appendChild(lbl);row.appendChild(badge);row.appendChild(tglWrap);row.appendChild(delBtn);
+    list.appendChild(row);
+  });
+  card.appendChild(list);
+
+  if(!ALERT_RULES.length){
+    var rst=mk('button','btn btn-ghost','恢复默认规则');
+    rst.style.cssText='font-size:12px;margin-top:12px;';
+    rst.onclick=function(){ALERT_RULES=JSON.parse(JSON.stringify(ALERT_RULES_DEFAULT));save(SK.RULES,ALERT_RULES);renderAlertRules();renderAlertList();};
+    card.appendChild(rst);
+  }
+}
+
+function renderAlertList(){
+  var card=q('alert-list-card');if(!card)return;
+  card.innerHTML='';
+
+  var enabledRules=ALERT_RULES.filter(function(r){return r.enabled;}).sort(function(a,b){return a.days-b.days;});
+  var allTriggered={};
+  enabledRules.forEach(function(r){
+    (C||[]).forEach(function(c){var d=daysTo(c.end);if(d!==null&&d>=0&&d<=r.days)allTriggered[c.id]=true;});
+  });
+  var totalCount=Object.keys(allTriggered).length;
+
+  // Sidebar badge
+  var countEl=q('alerts-count');
+  if(countEl){countEl.textContent=totalCount?totalCount:'';countEl.style.display=totalCount?'':'none';}
+
+  // Header
+  var hdr=mk('div');hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:14px;';
+  var htitle=mk('span','','待处理提醒');htitle.style.cssText='font-size:14px;font-weight:700;';
+  var hcnt=mk('span','',totalCount?''+totalCount:'');
+  hcnt.style.cssText='font-size:11px;background:var(--rl);color:var(--red);padding:1px 7px;border-radius:8px;font-weight:700;display:'+(totalCount?'inline':'none')+';';
+  hdr.appendChild(htitle);hdr.appendChild(hcnt);card.appendChild(hdr);
+
+  if(!enabledRules.length){
+    var off=mk('div','','所有提醒规则已关闭');off.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px;';
+    card.appendChild(off);return;
+  }
+  if(!totalCount){
+    var em=mk('div','','近期无需处理的提醒，所有合同状态正常 ✅');
+    em.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px;';
+    card.appendChild(em);return;
   }
 
-  urgent.forEach(function(c){
-    var d = daysTo(c.end);
-    var col = d<=7?'var(--red)':'var(--orange)';
-    var icon = d<=7?'🚨':'⚠';
-    var row = mk('div','alert-item');
-    var dot = mk('div','alert-dot'); dot.style.background=col;
-    var inf = mk('div'); inf.style.flex='1';
-    var nm = mk('div','alert-name',c.name);
-    var ai = mk('div','alert-info', icon+' '+(d===0?'今天到期！':d+'天后到期')+' · '+c.party);
-    inf.appendChild(nm); inf.appendChild(ai);
-    // Action: click to view contract
-    var btn = mk('button','btn btn-ghost','查看合同'); btn.style.cssText='font-size:11px;padding:4px 9px;flex-shrink:0';
-    btn.onclick = (function(id){ return function(){ openContractDetail(id); }; })(c.id);
-    row.appendChild(dot); row.appendChild(inf); row.appendChild(btn);
-    el.appendChild(row);
+  // Assign each contract to its tightest matching rule
+  var assigned={};
+  enabledRules.forEach(function(rule){
+    var col=_COLOR_MAP[rule.color]||'var(--text3)';
+    var rContracts=(C||[]).filter(function(c){
+      if(assigned[c.id])return false;
+      var d=daysTo(c.end);return d!==null&&d>=0&&d<=rule.days;
+    }).sort(function(a,b){return new Date(a.end)-new Date(b.end);});
+    rContracts.forEach(function(c){assigned[c.id]=true;});
+    if(!rContracts.length)return;
+
+    var grp=mk('div');grp.style.cssText='margin-bottom:16px;';
+    var glbl=mk('div');glbl.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;font-weight:700;color:'+col+';letter-spacing:.3px;';
+    glbl.appendChild(mk('span','',rule.icon));
+    glbl.appendChild(mk('span','',rule.label+' ('+rule.days+'天内) — '+rContracts.length+'份'));
+    grp.appendChild(glbl);
+
+    rContracts.forEach(function(c){
+      var d=daysTo(c.end);
+      var row=mk('div','alert-item');
+      var dot=mk('div','alert-dot');dot.style.background=col;
+      var inf=mk('div');inf.style.flex='1';
+      var nm=mk('div','alert-name',c.name);
+      var subTxt=(c.entity||c.brand||'')+(c.counterparty?' · '+c.counterparty:'');
+      var sub=mk('div','alert-info',subTxt);
+      inf.appendChild(nm);inf.appendChild(sub);
+      var right=mk('div');right.style.cssText='display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;';
+      var dt=mk('div','',d===0?'今天到期！':d===1?'明天到期！':d+'天后');dt.style.cssText='font-size:11px;font-weight:700;color:'+col+';white-space:nowrap;';
+      var dd=mk('div','',c.end);dd.style.cssText='font-size:10px;color:var(--text3);font-family:JetBrains Mono,monospace;';
+      var btn=mk('button','btn btn-ghost','查看');btn.style.cssText='font-size:11px;padding:3px 8px;';
+      btn.onclick=(function(cc){return function(){openContractDetail(cc);};})(c);
+      right.appendChild(dt);right.appendChild(dd);right.appendChild(btn);
+      row.appendChild(dot);row.appendChild(inf);row.appendChild(right);
+      grp.appendChild(row);
+    });
+    card.appendChild(grp);
   });
 }
 
