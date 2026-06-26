@@ -2870,6 +2870,31 @@ function showTplEntityDetail(bk,en){
   er.appendChild(cc);
 }
 
+// Auto-migrate legacy T folders (no entityRef) to brand/entity refs by name matching
+function migrateTplFolders(){
+  var changed=false;
+  T.forEach(function(f){
+    if(f.entityRef)return;
+    // normalise: remove spaces, punctuation, lowercase
+    var fname=f.name.replace(/[\s　\-_·.。]/g,'').toLowerCase();
+    if(!fname)return;
+    var matched=false;
+    for(var i=0;i<BRANDS.length&&!matched;i++){
+      var b=BRANDS[i];
+      for(var j=0;j<b.entities.length&&!matched;j++){
+        var en=b.entities[j].name.replace(/[\s　\-_·.。]/g,'').toLowerCase();
+        if(en.indexOf(fname)>-1||fname.indexOf(en)>-1||en.indexOf(fname.slice(0,4))>-1){
+          f.entityRef=b.key+'::'+b.entities[j].name;
+          matched=true;changed=true;
+          console.log('Migrated "'+f.name+'" → '+f.entityRef);
+        }
+      }
+    }
+  });
+  if(changed)save(SK.T,T);
+  return changed;
+}
+
 function openTplFileFormForEntity(eRef){
   var f=T.find(function(x){return x.entityRef===eRef;});
   if(!f){
@@ -4295,6 +4320,7 @@ _suppressFbSync = true;
 // Load from localStorage first (instant display)
 C=load(SK.C,[]);E=load(SK.E,DEF_E);T=load(SK.T,DEF_T);TL=loadTl();
 M=load(SK.M,{nextGId:10,nextEId:20,nextCId:30,nextFId:10,nextTId:20});
+migrateTplFolders(); // auto-associate legacy folders with entities
 setView('all');
 renderDashboard();renderGroupList();renderTplList();updateNavCounts();
 
@@ -4307,6 +4333,7 @@ fbLoadAll().then(function(){
   try{ localStorage.setItem(SK.M, JSON.stringify(M)); }catch(e){}
   // Now enable Firebase sync for future user actions
   _suppressFbSync = false;
+  migrateTplFolders(); // re-run after Firebase data is loaded
   // Re-render with Firebase data
   renderDashboard();renderContracts();renderGroupList();renderTplList();updateNavCounts();
   console.log('Rendered with Firebase data');
