@@ -250,143 +250,109 @@ Analyse this contract and return ONLY a valid JSON object (no markdown, no expla
   catch(e) { return { confidence: 'low', name: fileName, isSigned: false }; }
 }
 
-async function runDriveScan() {
-  const folderId = process.env.DRIVE_FOLDER_ID;
-  if (!folderId || !process.env.ANTHROPIC_API_KEY) throw new Error('Missing env vars');
+const SUPPORTED_MIME = [
+  'application/pdf','image/jpeg','image/png','image/webp','image/gif',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword','application/vnd.google-apps.document'
+];
 
+function makeContractId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+
+// Step 1: list new files only (fast, < 2s)
+async function listNewDriveFiles() {
+  const folderId = process.env.DRIVE_FOLDER_ID;
+  if (!folderId) throw new Error('Missing DRIVE_FOLDER_ID');
   const drive = getDriveClient();
 
-  // 1. List all files in Drive folder (supportsAllDrives for Shared Drives)
   const listRes = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
-    fields: 'files(id,name,mimeType,modifiedTime,size)',
+    fields: 'files(id,name,mimeType,modifiedTime)',
     pageSize: 200,
     supportsAllDrives: true,
     includeItemsFromAllDrives: true
   });
   const allFiles = listRes.data.files || [];
-  console.log(`Drive scan: found ${allFiles.length} files in folder ${folderId}`);
+  console.log(`Drive list: ${allFiles.length} files in folder ${folderId}`);
 
-  // 2. Get existing contract driveFileIds from Firestore
   const contractsDoc = await db.collection('cms').doc('contracts').get();
   const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
-
   const knownIds = new Set();
   contracts.forEach(c => {
     if (c.driveFileId) knownIds.add(c.driveFileId);
     (c.versions || []).forEach(v => { if (v.driveFileId) knownIds.add(v.driveFileId); });
   });
 
-  // 3. Separate new vs known files
-  const SUPPORTED = ['application/pdf','image/jpeg','image/png','image/webp','image/gif',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword','application/vnd.google-apps.document'];
-  const newFiles   = allFiles.filter(f => !knownIds.has(f.id) && SUPPORTED.includes(f.mimeType));
-  const skipped    = allFiles.filter(f => !knownIds.has(f.id) && !SUPPORTED.includes(f.mimeType)).length;
+  const newFiles = allFiles.filter(f => !knownIds.has(f.id) && SUPPORTED_MIME.includes(f.mimeType));
+  const skipped  = allFiles.filter(f => !knownIds.has(f.id) && !SUPPORTED_MIME.includes(f.mimeType)).length;
+  return { total: allFiles.length, newFiles, skipped };
+}
 
-  if (newFiles.length === 0) {
-    return { total: allFiles.length, newFiles: 0, added: 0, drafts: 0, errors: [], skipped };
+// Step 2: process one file (download + Claude + Firestore save, < 10s)
+async function processOneDriveFile(fileId, fileName, mimeType) {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('Missing ANTHROPIC_API_KEY');
+  const drive = getDriveClient();
+
+  let buffer, mime = mimeType;
+  if (mime === 'application/vnd.google-apps.document') {
+    const r = await drive.files.export({ fileId, mimeType: 'application/pdf', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+    buffer = Buffer.from(r.data); mime = 'application/pdf';
+  } else {
+    const r = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+    buffer = Buffer.from(r.data);
   }
 
-  // 4. Download + extract each new file
-  const processed = [];
-  const errors    = [];
+  const x = await extractWithClaude(buffer, mime, fileName);
 
-  for (const file of newFiles) {
-    try {
-      let buffer, mime = file.mimeType;
+  const contractsDoc = await db.collection('cms').doc('contracts').get();
+  const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
 
-      if (mime === 'application/vnd.google-apps.document') {
-        // Native Google Doc → export as PDF
-        const r = await drive.files.export({ fileId: file.id, mimeType: 'application/pdf', supportsAllDrives: true }, { responseType: 'arraybuffer' });
-        buffer = Buffer.from(r.data); mime = 'application/pdf';
-      } else {
-        const r = await drive.files.get({ fileId: file.id, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
-        buffer = Buffer.from(r.data);
-      }
+  // Check if already exists (race condition guard)
+  const alreadyExists = contracts.some(c =>
+    c.driveFileId === fileId || (c.versions || []).some(v => v.driveFileId === fileId)
+  );
+  if (alreadyExists) return { skipped: true };
 
-      const extracted = await extractWithClaude(buffer, mime, file.name);
-      processed.push({ file, extracted });
-    } catch(err) {
-      errors.push({ file: file.name, error: err.message });
-    }
-    await new Promise(r => setTimeout(r, 400)); // rate-limit buffer
-  }
-
-  // 5. Build contract records
-  // Separate signed vs draft
-  const signed = processed.filter(p => p.extracted.isSigned !== false || p.extracted.confidence === 'low');
-  const drafts = processed.filter(p => p.extracted.isSigned === false && p.extracted.confidence !== 'low');
-
-  function makeId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
-
-  function buildRecord(p, status, versions=[]) {
-    const x = p.extracted;
-    return {
-      id: makeId(),
-      name: x.name || p.file.name.replace(/\.[^.]+$/, ''),
-      counterparty: x.counterparty || '',
-      entity: x.ourEntity || '',
-      type: x.type === 'intercompany' ? 'intercompany' : 'external',
-      contractType: x.contractType || '',
-      startDate: x.startDate || '',
-      endDate: x.endDate || '',
-      value: x.value || null,
-      currency: x.currency || 'SGD',
-      autoRenew: x.autoRenew || false,
-      noticePeriod: x.noticePeriod || null,
-      status,
-      notes: x.summary || '',
-      driveFileId: p.file.id,
-      driveFileName: p.file.name,
-      driveScannedAt: new Date().toISOString(),
-      aiConfidence: x.confidence || 'medium',
-      versions,
-      createdAt: new Date().toISOString()
-    };
-  }
-
-  const newRecords = [];
-
-  // For each signed file, find matching drafts (same counterparty prefix)
-  const matchedDraftIds = new Set();
-  for (const s of signed) {
-    const cp = (s.extracted.counterparty || '').toLowerCase().replace(/\s+/g,'').slice(0,10);
-    const matchingDrafts = cp ? drafts.filter(d => {
-      if (matchedDraftIds.has(d.file.id)) return false;
-      const dcp = (d.extracted.counterparty || '').toLowerCase().replace(/\s+/g,'').slice(0,10);
-      return cp && dcp && (cp.includes(dcp.slice(0,6)) || dcp.includes(cp.slice(0,6)));
-    }) : [];
-
-    const versions = matchingDrafts.map(d => {
-      matchedDraftIds.add(d.file.id);
-      return { driveFileId: d.file.id, driveFileName: d.file.name, isSigned: false, scannedAt: new Date().toISOString() };
+  // Try to match to existing contract as a version (same counterparty)
+  if (x.isSigned === false && x.confidence !== 'low' && x.counterparty) {
+    const cp = x.counterparty.toLowerCase().replace(/\s+/g,'').slice(0,10);
+    const existing = contracts.find(c => {
+      const ecp = (c.counterparty||'').toLowerCase().replace(/\s+/g,'').slice(0,10);
+      return ecp && cp && (ecp.includes(cp.slice(0,6)) || cp.includes(ecp.slice(0,6)));
     });
-
-    newRecords.push(buildRecord(s, 'active', versions));
-  }
-
-  // Unmatched drafts → reviewing status
-  for (const d of drafts) {
-    if (!matchedDraftIds.has(d.file.id)) {
-      newRecords.push(buildRecord(d, 'reviewing', []));
+    if (existing) {
+      if (!existing.versions) existing.versions = [];
+      existing.versions.push({ driveFileId: fileId, driveFileName: fileName, isSigned: false, scannedAt: new Date().toISOString() });
+      await db.collection('cms').doc('contracts').set({ data: contracts });
+      return { action: 'version_added', contract: existing.name };
     }
   }
 
-  // 6. Save to Firestore
-  if (newRecords.length > 0) {
-    await db.collection('cms').doc('contracts').set({ data: [...contracts, ...newRecords] });
-  }
-
-  const scanLog = {
-    lastScan: new Date().toISOString(),
-    total: allFiles.length, newFiles: newFiles.length,
-    added: signed.length, drafts: drafts.filter(d => !matchedDraftIds.has(d.file.id)).length,
-    errors: errors.length, skipped
+  // New contract record
+  const record = {
+    id: makeContractId(),
+    name: x.name || fileName.replace(/\.[^.]+$/, ''),
+    counterparty: x.counterparty || '',
+    entity: x.ourEntity || '',
+    type: x.type === 'intercompany' ? 'intercompany' : 'external',
+    contractType: x.contractType || '',
+    startDate: x.startDate || '',
+    endDate: x.endDate || '',
+    value: x.value || null,
+    currency: x.currency || 'SGD',
+    autoRenew: x.autoRenew || false,
+    noticePeriod: x.noticePeriod || null,
+    status: x.isSigned === false ? 'reviewing' : 'active',
+    notes: x.summary || '',
+    driveFileId: fileId,
+    driveFileName: fileName,
+    driveScannedAt: new Date().toISOString(),
+    aiConfidence: x.confidence || 'medium',
+    versions: [],
+    createdAt: new Date().toISOString()
   };
-  await db.collection('cms').doc('scanLog').set(scanLog);
 
-  return { ...scanLog, errorDetails: errors };
+  await db.collection('cms').doc('contracts').set({ data: [...contracts, record] });
+  return { action: 'added', name: record.name, status: record.status, confidence: x.confidence };
 }
 
 // GET /api/drive/debug — diagnose Drive access
@@ -421,13 +387,26 @@ app.get('/api/drive/debug', async (req, res) => {
   }
 });
 
-// POST /api/drive/scan — manual trigger from frontend
+// POST /api/drive/scan — Step 1: list new files only (fast < 2s)
 app.post('/api/drive/scan', async (req, res) => {
   try {
-    const result = await runDriveScan();
+    const { total, newFiles, skipped } = await listNewDriveFiles();
+    res.json({ ok: true, total, newFiles, skipped });
+  } catch(e) {
+    console.error('Drive list error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/drive/process — Step 2: process one file (< 10s)
+app.post('/api/drive/process', async (req, res) => {
+  try {
+    const { fileId, fileName, mimeType } = req.body;
+    if (!fileId || !fileName) return res.status(400).json({ error: 'Missing fileId or fileName' });
+    const result = await processOneDriveFile(fileId, fileName, mimeType);
     res.json({ ok: true, ...result });
   } catch(e) {
-    console.error('Drive scan error:', e);
+    console.error('Drive process error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -442,16 +421,26 @@ app.get('/api/drive/status', async (req, res) => {
   }
 });
 
-// GET /api/drive/cron-scan — called by Vercel cron (daily)
+// GET /api/drive/cron-scan — called by Vercel cron (daily): list + process all one by one
 app.get('/api/drive/cron-scan', async (req, res) => {
   const secret = process.env.CRON_SECRET;
   if (secret && req.headers.authorization !== `Bearer ${secret}`) {
     return res.status(401).json({ error: 'Unauthorised' });
   }
   try {
-    const result = await runDriveScan();
-    console.log('Cron scan result:', result);
-    res.json({ ok: true, ...result });
+    const { newFiles, skipped } = await listNewDriveFiles();
+    const results = { added: 0, reviewing: 0, errors: 0 };
+    for (const f of newFiles) {
+      try {
+        const r = await processOneDriveFile(f.id, f.name, f.mimeType);
+        if (r.action === 'added') { if (r.status === 'active') results.added++; else results.reviewing++; }
+      } catch(e) { results.errors++; console.error('Cron process error:', f.name, e.message); }
+    }
+    // Save scan log
+    await db.collection('cms').doc('scanLog').set({
+      lastScan: new Date().toISOString(), ...results, skipped, newFiles: newFiles.length
+    });
+    res.json({ ok: true, ...results, skipped });
   } catch(e) {
     console.error('Cron scan error:', e);
     res.status(500).json({ ok: false, error: e.message });

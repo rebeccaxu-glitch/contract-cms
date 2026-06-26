@@ -3852,69 +3852,86 @@ function startDriveScan(){
   diScanning = true;
   var btn = q('di-scan-btn');
   var prog = q('di-progress');
-  var empty = q('di-empty');
-  var result = q('di-result');
+  var resEl = q('di-result');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Scanning...'; }
   if(prog) prog.style.display='block';
-  if(empty) empty.style.display='none';
-  if(result) result.style.display='none';
+  if(resEl) resEl.style.display='none';
   q('di-bar').style.width='5%';
-  q('di-prog-text').textContent='Connecting to Google Drive...';
+  q('di-prog-text').textContent='Checking Google Drive for new files...';
 
-  // Animate progress bar while waiting
-  var pct=5;
-  var animTimer=setInterval(function(){
-    pct=Math.min(pct+2,85);
-    q('di-bar').style.width=pct+'%';
-  },800);
+  var added=0, reviewing=0, errors=0;
 
+  // Step 1: get list of new files
   fetch('/api/drive/scan',{method:'POST',headers:{'Content-Type':'application/json'}})
   .then(function(r){ return r.json(); })
   .then(function(data){
-    clearInterval(animTimer);
-    q('di-bar').style.width='100%';
+    if(!data.ok) throw new Error(data.error||'List failed');
+    var files = data.newFiles || [];
+    if(files.length===0){
+      finishScan(0,0,0,data.skipped||0);
+      return;
+    }
+    q('di-prog-text').textContent='Processing 0 / '+files.length+' files...';
+    q('di-bar').style.width='10%';
+    // Step 2: process one file at a time
+    processFiles(files, 0, data.skipped||0);
+  })
+  .catch(function(err){ scanError(err.message); });
+
+  function processFiles(files, idx, skipped){
+    if(idx >= files.length){ finishScan(added, reviewing, errors, skipped); return; }
+    var f = files[idx];
+    var pct = Math.round(10 + (idx/files.length)*88);
+    q('di-bar').style.width = pct+'%';
+    q('di-prog-text').textContent = 'Processing '+(idx+1)+' / '+files.length+': '+f.name.slice(0,40)+'...';
+
+    fetch('/api/drive/process',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({fileId:f.id, fileName:f.name, mimeType:f.mimeType})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.ok){
+        if(d.action==='added'){ if(d.status==='active') added++; else reviewing++; }
+      } else { errors++; }
+      setTimeout(function(){ processFiles(files, idx+1, skipped); }, 200);
+    })
+    .catch(function(){ errors++; setTimeout(function(){ processFiles(files, idx+1, skipped); }, 200); });
+  }
+
+  function finishScan(a, rv, e, sk){
     diScanning=false;
-    if(btn){ btn.disabled=false; btn.textContent='🔄 Scan Again'; }
+    q('di-bar').style.width='100%';
     if(prog) prog.style.display='none';
-
-    if(!data.ok){ throw new Error(data.error||'Scan failed'); }
-
-    // Show result
-    var res = q('di-result');
-    if(res){
-      res.style.display='block';
-      res.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">✅ Scan complete</div>'
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Scan Again'; }
+    var el=q('di-last-scan'); if(el) el.textContent='Last scan: '+new Date().toLocaleString();
+    if(resEl){
+      resEl.style.display='block';
+      resEl.innerHTML='<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">✅ Scan complete</div>'
         +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'
-        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--accent);">'+(data.added||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Added</div></div>'
-        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--yellow);">'+(data.drafts||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Reviewing</div></div>'
-        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text3);">'+(data.skipped||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Skipped</div></div>'
-        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+(data.errors||0)+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--accent);">'+a+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Added</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--yellow);">'+rv+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Reviewing</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text3);">'+sk+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Skipped</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+e+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
         +'</div>';
     }
-    // Update last scan label
-    var el=q('di-last-scan'); if(el) el.textContent='Last scan: '+new Date().toLocaleString();
-
-    // Refresh contract list from Firebase if new contracts were added
-    if((data.added||0)+(data.drafts||0)>0){
+    if(a+rv>0){
       fbLoadAll().then(function(){
         renderDashboard();renderContracts();renderGroupList();updateNavCounts();
       }).catch(function(){});
     }
-  })
-  .catch(function(err){
-    clearInterval(animTimer);
+  }
+
+  function scanError(msg){
     diScanning=false;
-    if(btn){ btn.disabled=false; btn.textContent='🔄 Scan Drive'; }
     if(prog) prog.style.display='none';
-    var res=q('di-result');
-    if(res){
-      res.style.display='block';
-      res.innerHTML='<div style="color:var(--red);font-size:13px;">❌ Scan failed: '+(err.message||err)+'</div>';
-    }
-  });
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Scan Drive'; }
+    if(resEl){ resEl.style.display='block'; resEl.innerHTML='<div style="color:var(--red);font-size:13px;">❌ '+msg+'</div>'; }
+  }
 }
 
-function processNextDriveFile(){ /* replaced by startDriveScan() */ }
+function processNextDriveFile(){ /* replaced */ }
 
 function renderDriveFileRows(){
   var tb = q('di-tbody');
