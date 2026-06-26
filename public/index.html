@@ -362,10 +362,9 @@ textarea.form-input{resize:vertical;}
       <div class="split-layout">
         <div class="split-left">
           <div class="split-left-header">
-            <span class="split-left-title">模板文件夹</span>
-            <button class="btn btn-primary" style="padding:4px 9px;font-size:11px" onclick="openTplFolderForm(null)">＋ 新建</button>
+            <span class="split-left-title">品牌 / 主体</span>
           </div>
-          <div class="split-left-body" id="tpl-folder-list"></div>
+          <div class="split-left-body" id="tpl-brand-tree" style="padding:6px 4px;"></div>
         </div>
         <div class="split-right" id="tpl-right">
           <div class="placeholder-empty"><div class="placeholder-icon">📁</div><div class="placeholder-text">请选择左侧文件夹</div></div>
@@ -1008,7 +1007,9 @@ var editCoId    = null;
 var editCatGid  = null;
 var editCatEid  = null;
 var editCatCid  = null;
-var curTplId    = null;
+var curTplId        = null;
+var curTplEntityRef = null;   // 'brandKey::entityName'
+var collapsedTplBrands = {};
 var editTplId   = null;
 var editTplFid  = null;
 var curViewCid  = null;
@@ -2665,27 +2666,226 @@ function deleteCat(gid,eid,cid){
 }
 
 // ── Templates ───────────────────────────────────────────
-function renderTplList(){
-  var el=q('tpl-folder-list');if(!el)return;
+function renderTplList(){ renderTplBrandTree(); }
+
+function renderTplBrandTree(){
+  var el=q('tpl-brand-tree');if(!el)return;
   el.innerHTML='';
-  if(!T.length){var em=mk('div','','暂无文件夹');em.style.cssText='text-align:center;padding:24px;color:var(--text3);font-size:13px';el.appendChild(em);return;}
-  T.forEach(function(f){
-    var item=mk('div','list-item'+(f.id===curTplId?' active':''));
-    var icon=mk('span','',f.icon);icon.style.fontSize='18px';
-    var info=mk('div');info.style.cssText='min-width:0;flex:1';
-    var nm=mk('div','list-item-name',f.name);nm.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-    var sub=mk('div','list-item-sub',f.files.length+' 个模板');
-    info.appendChild(nm);info.appendChild(sub);
-    item.appendChild(icon);item.appendChild(info);
-    item.onclick=(function(fid){return function(){selectTplFolder(fid);};})(f.id);
-    el.appendChild(item);
+  BRANDS.forEach(function(brand,bi){
+    var brandTplCount=0;
+    brand.entities.forEach(function(ent){
+      var eRef=brand.key+'::'+ent.name;
+      T.forEach(function(f){if(f.entityRef===eRef)brandTplCount+=f.files.length;});
+    });
+    var isOpen=!!collapsedTplBrands[brand.key];
+
+    var entWrap=document.createElement('div');
+    entWrap.className='entity-list-wrap';
+    if(isOpen)entWrap.style.display='block';
+
+    function buildEntityRows(){
+      entWrap.innerHTML='';
+      BRANDS[bi].entities.forEach(function(ent,ei){
+        var eRef=brand.key+'::'+ent.name;
+        var tCount=0;T.forEach(function(f){if(f.entityRef===eRef)tCount+=f.files.length;});
+        var eRow=document.createElement('div');
+        eRow.className='entity-row'+(curTplEntityRef===eRef?' active':'');
+        eRow.style.position='relative';
+
+        var flag=mk('span','',ent.flag);
+        flag.style.cssText='font-size:11px;flex-shrink:0;cursor:pointer;padding:0 2px;border-radius:3px;';
+        flag.title='Click to change flag';
+        flag.onclick=(function(bi2,ei2,fl){return function(e){
+          e.stopPropagation();
+          var inp=document.createElement('input');inp.type='text';inp.value=BRANDS[bi2].entities[ei2].flag;
+          inp.style.cssText='width:36px;border:1px solid var(--accent);border-radius:3px;padding:1px 3px;font-size:13px;text-align:center;background:var(--surface2);color:var(--text);';
+          eRow.replaceChild(inp,fl);inp.focus();inp.select();
+          function done(){var v=inp.value.trim();if(v)BRANDS[bi2].entities[ei2].flag=v;save(SK.BRANDS,BRANDS);renderTplBrandTree();}
+          inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=BRANDS[bi2].entities[ei2].flag;inp.blur();}};
+        };})(bi,ei,flag);
+
+        var nameLbl=mk('span','entity-name-txt',ent.name);
+        nameLbl.onclick=(function(bk,en){return function(e){e.stopPropagation();selectTplEntity(bk,en);};})(brand.key,ent.name);
+
+        var editE=mk('span','','✎');
+        editE.style.cssText='font-size:10px;color:var(--text3);cursor:pointer;opacity:0;flex-shrink:0;padding:0 1px;transition:opacity .15s;';
+        editE.onclick=(function(bi2,ei2,lbl){return function(e){
+          e.stopPropagation();
+          var inp=document.createElement('input');inp.type='text';inp.value=BRANDS[bi2].entities[ei2].name;
+          inp.style.cssText='flex:1;min-width:0;border:1px solid var(--accent);border-radius:3px;padding:1px 5px;font-size:12px;background:var(--surface2);color:var(--text);';
+          eRow.replaceChild(inp,lbl);editE.style.display='none';inp.focus();inp.select();
+          function done(){var v=inp.value.trim();if(v)BRANDS[bi2].entities[ei2].name=v;save(SK.BRANDS,BRANDS);renderTplBrandTree();}
+          inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=BRANDS[bi2].entities[ei2].name;inp.blur();}};
+        };})(bi,ei,nameLbl);
+
+        var delE=mk('span','','×');
+        delE.style.cssText='font-size:12px;color:var(--text3);cursor:pointer;opacity:0;flex-shrink:0;padding:0 1px;transition:opacity .15s;';
+        delE.onclick=(function(bi2,ei2,en){return function(e){
+          e.stopPropagation();
+          if(confirm('Delete "'+en+'"?')){BRANDS[bi2].entities.splice(ei2,1);save(SK.BRANDS,BRANDS);renderTplBrandTree();}
+        };})(bi,ei,ent.name);
+
+        var cnt=mk('span','brand-cnt',tCount?''+tCount:'');
+        eRow.appendChild(flag);eRow.appendChild(nameLbl);eRow.appendChild(editE);eRow.appendChild(delE);eRow.appendChild(cnt);
+        eRow.onmouseover=function(){editE.style.opacity='1';delE.style.opacity='1';};
+        eRow.onmouseout=function(){editE.style.opacity='0';delE.style.opacity='0';};
+        entWrap.appendChild(eRow);
+      });
+      var addRow=document.createElement('div');
+      addRow.style.cssText='padding:3px 12px 3px 28px;cursor:pointer;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:3px;';
+      addRow.innerHTML='<span style="font-size:13px;line-height:1;">＋</span><span>Add entity</span>';
+      addRow.onmouseover=function(){this.style.color='var(--accent)';};
+      addRow.onmouseout=function(){this.style.color='var(--text3)';};
+      addRow.onclick=(function(bi2){return function(e){
+        e.stopPropagation();
+        var inp=document.createElement('input');inp.type='text';inp.placeholder='Entity name…';
+        inp.style.cssText='width:calc(100% - 28px);margin:3px 12px 3px 28px;border:1px solid var(--accent);border-radius:3px;padding:2px 6px;font-size:12px;background:var(--surface2);color:var(--text);box-sizing:border-box;';
+        entWrap.insertBefore(inp,addRow);inp.focus();
+        function doAdd(){var v=inp.value.trim();if(v){BRANDS[bi2].entities.push({flag:'🏳',name:v});save(SK.BRANDS,BRANDS);}renderTplBrandTree();}
+        inp.onblur=doAdd;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value='';inp.blur();}};
+      };})(bi);
+      entWrap.appendChild(addRow);
+    }
+    buildEntityRows();
+
+    var bRow=document.createElement('div');
+    bRow.className='brand-row';
+    var chev=mk('span','brand-chevron',isOpen?'▾':'▸');
+    var dot=mk('span','brand-dot','');dot.style.background=brand.color;
+    var lbl=mk('span','',brand.name);
+    lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;';
+    var editB=mk('span','','✎');
+    editB.style.cssText='font-size:10px;color:var(--text3);cursor:pointer;opacity:0;flex-shrink:0;padding:0 1px;transition:opacity .15s;';
+    editB.onclick=(function(bi2,l){return function(e){
+      e.stopPropagation();
+      var inp=document.createElement('input');inp.type='text';inp.value=BRANDS[bi2].name;
+      inp.style.cssText='flex:1;min-width:0;border:1px solid var(--accent);border-radius:3px;padding:1px 5px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--text);';
+      bRow.replaceChild(inp,l);editB.style.display='none';inp.focus();inp.select();
+      function done(){var v=inp.value.trim();if(v)BRANDS[bi2].name=v;save(SK.BRANDS,BRANDS);renderTplBrandTree();}
+      inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=BRANDS[bi2].name;inp.blur();}};
+    };})(bi,lbl);
+    var bCnt=mk('span','brand-cnt',brandTplCount?''+brandTplCount:'');
+    bRow.appendChild(chev);bRow.appendChild(dot);bRow.appendChild(lbl);bRow.appendChild(editB);bRow.appendChild(bCnt);
+    bRow.onmouseover=function(){editB.style.opacity='1';};
+    bRow.onmouseout=function(){editB.style.opacity='0';};
+    bRow.onclick=(function(bk,ew,ch){return function(e){
+      e.stopPropagation();
+      var nowOpen=!collapsedTplBrands[bk];
+      collapsedTplBrands[bk]=nowOpen;
+      ew.style.display=nowOpen?'block':'none';
+      ch.textContent=nowOpen?'▾':'▸';
+    };})(brand.key,entWrap,chev);
+    el.appendChild(bRow);el.appendChild(entWrap);
   });
+
+  // Add brand button
+  var addBrandBtn=document.createElement('div');
+  addBrandBtn.style.cssText='padding:6px 12px 4px 12px;cursor:pointer;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:3px;margin-top:2px;';
+  addBrandBtn.innerHTML='<span style="font-size:13px;line-height:1;">＋</span><span>Add brand</span>';
+  addBrandBtn.onmouseover=function(){this.style.color='var(--accent)';};
+  addBrandBtn.onmouseout=function(){this.style.color='var(--text3)';};
+  addBrandBtn.onclick=function(e){
+    e.stopPropagation();
+    var key='brand_'+Date.now();
+    BRANDS.push({key:key,name:'New Brand',color:BRAND_COLORS[BRANDS.length%BRAND_COLORS.length],entities:[]});
+    save(SK.BRANDS,BRANDS);renderTplBrandTree();
+  };
+  el.appendChild(addBrandBtn);
 }
+
+function selectTplEntity(bk,en){
+  curTplEntityRef=bk+'::'+en;
+  renderTplBrandTree();
+  showTplEntityDetail(bk,en);
+}
+
+function showTplEntityDetail(bk,en){
+  var er=q('tpl-right');er.innerHTML='';
+  var eRef=bk+'::'+en;
+  var brand=null,entity=null;
+  for(var i=0;i<BRANDS.length;i++){
+    if(BRANDS[i].key===bk){
+      brand=BRANDS[i];
+      for(var j=0;j<brand.entities.length;j++){if(brand.entities[j].name===en){entity=brand.entities[j];break;}}
+      break;
+    }
+  }
+  var hc=mk('div','card');
+  var hrow=mk('div');hrow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
+  var li=mk('div');li.style.cssText='display:flex;align-items:center;gap:11px';
+  var ic=mk('div','',entity?entity.flag:'🏳');ic.style.cssText='font-size:28px';
+  var inf=mk('div');
+  var nm=mk('div','',en);nm.style.cssText='font-size:17px;font-weight:700';
+  var br=mk('div','',brand?brand.name:'');br.style.cssText='font-size:12px;color:var(--text3);margin-top:2px';
+  inf.appendChild(nm);inf.appendChild(br);li.appendChild(ic);li.appendChild(inf);
+  var ba=mk('button','btn btn-primary','＋ 添加模板');ba.style.fontSize='12px';
+  ba.onclick=(function(ref){return function(){openTplFileFormForEntity(ref);};})(eRef);
+  hrow.appendChild(li);hrow.appendChild(ba);hc.appendChild(hrow);er.appendChild(hc);
+
+  var entityFolders=T.filter(function(f){return f.entityRef===eRef;});
+  var allFiles=[];
+  entityFolders.forEach(function(f){f.files.forEach(function(t){allFiles.push({file:t,folderId:f.id});});});
+
+  var cc=mk('div','card');
+  var st=mk('div','section-title','模板文件');cc.appendChild(st);
+  if(!allFiles.length){
+    var em=mk('div','','暂无模板，点击右上角「＋ 添加模板」');
+    em.style.cssText='text-align:center;padding:32px;color:var(--text3);font-size:13px';
+    cc.appendChild(em);
+  } else {
+    var grid=mk('div','cat-grid');
+    allFiles.forEach(function(item){
+      var t=item.file,fid=item.folderId;
+      var card=mk('div','cat-card');
+      var acts=mk('div','cat-actions');
+      var be2=mk('button','cat-action-btn','✏');
+      be2.onclick=(function(fid2,tid){return function(ev){ev.stopPropagation();openTplFileForm(fid2,tid);};})(fid,t.id);
+      var bd2=mk('button','cat-action-btn del','×');
+      bd2.onclick=(function(fid2,tid){return function(ev){ev.stopPropagation();deleteTplFile(fid2,tid);};})(fid,t.id);
+      acts.appendChild(be2);acts.appendChild(bd2);card.appendChild(acts);
+      var ti=mk('div','',TI[t.type]||'📋');ti.style.cssText='font-size:22px;margin-bottom:6px';
+      var tn=mk('div','',t.name);tn.style.cssText='font-size:13px;font-weight:600;margin-bottom:6px';
+      var tb=mk('div');tb.style.cssText='display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px';
+      var tl=mk('span','',t.type);tl.style.cssText='font-size:10px;padding:1px 6px;border-radius:8px;background:var(--al);color:var(--accent);font-weight:600';
+      var lg=mk('span','',t.lang);lg.style.cssText='font-size:10px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--text3)';
+      tb.appendChild(tl);tb.appendChild(lg);
+      if(t.ver){var vr=mk('span','',t.ver);vr.style.cssText='font-size:10px;padding:1px 6px;border-radius:8px;background:var(--border);color:var(--text3)';tb.appendChild(vr);}
+      var ad=mk('div','','添加于 '+t.added);ad.style.cssText='font-size:10px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)';
+      card.appendChild(ti);card.appendChild(tn);card.appendChild(tb);card.appendChild(ad);
+      var fileRow=mk('div');fileRow.style.cssText='margin-top:8px;display:flex;align-items:center;gap:6px';
+      if(t.fileData||t.hasFile){
+        var fic=mk('span','',t.fileType&&t.fileType.includes('pdf')?'📄':'📝');fic.style.fontSize='13px';
+        var fnm=mk('span','',t.fileName||t.name);fnm.style.cssText='font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        var dlb=mk('button','btn btn-primary','⬇ 下载');dlb.style.cssText='font-size:11px;padding:3px 8px;flex-shrink:0';
+        dlb.onclick=(function(fid2,tid){return function(ev){ev.stopPropagation();downloadTplFile(fid2,tid);};})(fid,t.id);
+        fileRow.appendChild(fic);fileRow.appendChild(fnm);fileRow.appendChild(dlb);
+      } else {
+        var nof=mk('span','','未上传文件');nof.style.cssText='font-size:11px;color:var(--text3);font-style:italic';
+        fileRow.appendChild(nof);
+      }
+      card.appendChild(fileRow);grid.appendChild(card);
+    });
+    cc.appendChild(grid);
+  }
+  er.appendChild(cc);
+}
+
+function openTplFileFormForEntity(eRef){
+  var f=T.find(function(x){return x.entityRef===eRef;});
+  if(!f){
+    var parts=eRef.split('::');
+    f={id:++M.nextFId,name:parts[1]||eRef,entityRef:eRef,icon:'📁',desc:'',files:[]};
+    T.push(f);save(SK.T,T);save(SK.M,M);
+  }
+  openTplFileForm(f.id,null);
+}
+
 function selectTplFolder(fid){
   curTplId=fid;renderTplList();
   var f=T.find(function(x){return x.id===fid;});if(f)showTplDetail(f);
 }
 function showTplDetail(f){
+  if(f&&f.entityRef){var parts=f.entityRef.split('::');showTplEntityDetail(parts[0],parts[1]);return;}
   var er=q('tpl-right');er.innerHTML='';
   var hc=mk('div','card');
   var hrow=mk('div');hrow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:14px';
