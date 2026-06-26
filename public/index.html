@@ -45,7 +45,7 @@ body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text
 .btn-danger{background:var(--rl);color:var(--red);border:1px solid rgba(184,50,50,0.2);}.btn-danger:hover{background:var(--red);color:#fff;}
 .content{flex:1;overflow-y:auto;padding:22px 24px;}
 .content::-webkit-scrollbar{width:5px;}.content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-.page{display:none;}.page.active{display:block;}
+.page{display:none;}.page.active{display:block;}.page.active.flex-page{display:flex;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;}
 .card-title{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
 .card-link{font-size:12px;color:var(--accent);cursor:pointer;font-weight:400;}.card-link:hover{text-decoration:underline;}
@@ -147,12 +147,27 @@ textarea.form-input{resize:vertical;}
 .tl-dot.current{background:var(--blue);border-color:var(--blue);box-shadow:0 0 0 3px var(--bl);}
 .tl-dot.pending{background:var(--surface2);border-color:var(--border);}
 .tl-label{font-size:13px;font-weight:500;}.tl-date{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:2px;}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
-.cal-day-label{text-align:center;font-size:11px;color:var(--text3);padding:3px;font-weight:600;}
-.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12px;border-radius:6px;cursor:pointer;color:var(--text2);font-family:'JetBrains Mono',monospace;position:relative;}
-.cal-day:hover{background:var(--surface2);}
-.cal-day.today{color:var(--accent);font-weight:700;background:var(--al);}
-.cal-day.has-event::after{content:'';position:absolute;bottom:2px;width:4px;height:4px;border-radius:50%;background:var(--red);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-day-label{text-align:center;font-size:10px;color:var(--text3);padding:5px 2px 3px;font-weight:600;letter-spacing:.5px;}
+.cal-cell{min-height:78px;padding:5px 5px 3px;border-radius:6px;border:1px solid transparent;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text2);position:relative;cursor:pointer;vertical-align:top;transition:background .1s;}
+.cal-cell:hover{background:var(--surface2);border-color:var(--border);}
+.cal-cell.today{color:var(--accent);font-weight:700;background:var(--al);border-color:var(--am);}
+.cal-cell.other-month{color:var(--border);}
+.cal-cell.selected{border-color:var(--accent)!important;background:var(--al)!important;}
+.cal-cell-num{display:block;margin-bottom:3px;}
+.cal-tag{font-size:9.5px;padding:1px 4px;border-radius:3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-family:'Noto Sans SC',sans-serif;font-weight:500;line-height:1.5;cursor:pointer;}
+.cal-tag.urg-red{background:var(--rl);color:var(--red);}
+.cal-tag.urg-orange{background:var(--ol);color:var(--orange);}
+.cal-tag.urg-yellow{background:var(--yl);color:var(--yellow);}
+.cal-tag.urg-gray{background:var(--surface2);color:var(--text3);}
+.year-strip{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;}
+.year-month-cell{text-align:center;cursor:pointer;padding:8px 4px 6px;border-radius:8px;border:1px solid transparent;transition:all .12s;}
+.year-month-cell:hover{background:var(--surface2);}
+.year-month-cell.active{background:var(--al);border-color:var(--am);}
+.cal-urgency-group{margin-bottom:10px;}
+.cal-urgency-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:5px;display:flex;align-items:center;gap:5px;}
+.cal-list-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;transition:background .1s;margin-bottom:2px;}
+.cal-list-row:hover{background:var(--surface2);}
 .section-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;padding-bottom:8px;border-top:none;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
 /* ── Brand tree (nested under Contract List nav item) ── */
 .brand-tree-header{padding:10px 12px 4px;font-size:10px;letter-spacing:2px;color:var(--text3);font-weight:600;text-transform:uppercase;flex-shrink:0;}
@@ -424,24 +439,50 @@ textarea.form-input{resize:vertical;}
     </div>
 
 <!-- CALENDAR -->
-    <div class="page" id="page-calendar">
-      <div class="grid2">
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-            <button class="btn btn-ghost" style="padding:4px 10px" onclick="calPrev()">&#8249;</button>
-            <span style="font-weight:600" id="cal-month-label"></span>
-            <button class="btn btn-ghost" style="padding:4px 10px" onclick="calNext()">&#8250;</button>
+    <div class="page flex-page" id="page-calendar" style="flex-direction:column;gap:14px;height:calc(100vh - 58px);overflow:hidden;">
+
+      <!-- ── MACRO: Year Overview ── -->
+      <div class="card" style="flex-shrink:0;padding:14px 16px 10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn btn-ghost" style="padding:3px 9px;font-size:13px;" onclick="calYearPrev()">&#8249;</button>
+            <span style="font-size:14px;font-weight:700;" id="cal-year-label"></span>
+            <button class="btn btn-ghost" style="padding:3px 9px;font-size:13px;" onclick="calYearNext()">&#8250;</button>
           </div>
-          <div class="cal-grid" id="cal-grid">
-            <div class="cal-day-label">日</div><div class="cal-day-label">一</div><div class="cal-day-label">二</div><div class="cal-day-label">三</div><div class="cal-day-label">四</div><div class="cal-day-label">五</div><div class="cal-day-label">六</div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;" onclick="calGoToday()">Today</button>
+        </div>
+        <div class="year-strip" id="cal-year-strip"></div>
+      </div>
+
+      <!-- ── MICRO: Month Calendar + List ── -->
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;flex:1;min-height:0;overflow:hidden;">
+
+        <!-- Month calendar -->
+        <div class="card" style="display:flex;flex-direction:column;overflow:hidden;padding:14px 12px 10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-shrink:0;">
+            <button class="btn btn-ghost" style="padding:3px 9px;" onclick="calPrev()">&#8249;</button>
+            <span style="font-size:14px;font-weight:600;" id="cal-month-label"></span>
+            <button class="btn btn-ghost" style="padding:3px 9px;" onclick="calNext()">&#8250;</button>
           </div>
-          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:14px;font-size:11px;color:var(--text3)">
-            <span>&#9679; <span style="color:var(--red)">红点</span> = 7天内</span>
-            <span>&#9679; <span style="color:var(--orange)">橙点</span> = 30天内</span>
-            <span>&#9679; <span style="color:var(--yellow)">黄点</span> = 60天内</span>
+          <div class="cal-grid" id="cal-grid" style="flex:1;grid-template-rows:auto;align-content:start;">
+            <div class="cal-day-label">日</div>
+            <div class="cal-day-label">一</div>
+            <div class="cal-day-label">二</div>
+            <div class="cal-day-label">三</div>
+            <div class="cal-day-label">四</div>
+            <div class="cal-day-label">五</div>
+            <div class="cal-day-label">六</div>
+          </div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:14px;font-size:10px;color:var(--text3);flex-shrink:0;">
+            <span>&#9679; <span style="color:var(--red)">7天内</span></span>
+            <span>&#9679; <span style="color:var(--orange)">30天内</span></span>
+            <span>&#9679; <span style="color:var(--yellow)">60天内</span></span>
+            <span>&#9679; <span style="color:var(--text3)">更远</span></span>
           </div>
         </div>
-        <div class="card" id="calendar-expiring-list"></div>
+
+        <!-- Contracts list -->
+        <div class="card" id="calendar-expiring-list" style="overflow-y:auto;padding:14px 12px;"></div>
       </div>
     </div>
 
@@ -3263,102 +3304,210 @@ function getCompanyLabel(val){
 var calYear  = new Date().getFullYear();
 var calMonth = new Date().getMonth(); // 0-indexed
 
+var calSelectedDay = null; // 'YYYY-MM-DD'
+
 function renderCalendar(){
+  renderYearStrip();
   renderCalGrid();
   renderCalExpiring();
 }
 
-function calPrev(){ calMonth--; if(calMonth<0){calMonth=11;calYear--;} renderCalGrid(); renderCalExpiring(); }
-function calNext(){ calMonth++; if(calMonth>11){calMonth=0;calYear++;} renderCalGrid(); renderCalExpiring(); }
+function calPrev(){
+  calMonth--; if(calMonth<0){calMonth=11;calYear--;}
+  calSelectedDay=null; renderYearStrip(); renderCalGrid(); renderCalExpiring();
+}
+function calNext(){
+  calMonth++; if(calMonth>11){calMonth=0;calYear++;}
+  calSelectedDay=null; renderYearStrip(); renderCalGrid(); renderCalExpiring();
+}
+function calYearPrev(){ calYear--; renderYearStrip(); renderCalGrid(); renderCalExpiring(); }
+function calYearNext(){ calYear++; renderYearStrip(); renderCalGrid(); renderCalExpiring(); }
+function calGoToday(){
+  var t=new Date(); calYear=t.getFullYear(); calMonth=t.getMonth();
+  calSelectedDay=null; renderYearStrip(); renderCalGrid(); renderCalExpiring();
+}
 
+// ── Macro: 12-month year strip ──
+function renderYearStrip(){
+  var el=q('cal-year-strip'); if(!el) return;
+  setText('cal-year-label', calYear+'年 到期概览');
+  var monthNames=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  var today=new Date();
+
+  // Pre-calculate max count for bar scaling
+  var counts=monthNames.map(function(_,mi){
+    return C.filter(function(c){if(!c.end)return false;var ed=new Date(c.end);return ed.getFullYear()===calYear&&ed.getMonth()===mi;}).length;
+  });
+  var maxCount=Math.max(1,Math.max.apply(null,counts));
+
+  el.innerHTML='';
+  monthNames.forEach(function(mn,mi){
+    var mc=C.filter(function(c){if(!c.end)return false;var ed=new Date(c.end);return ed.getFullYear()===calYear&&ed.getMonth()===mi;});
+    var count=mc.length;
+    var minDays=999;
+    mc.forEach(function(c){var d=daysTo(c.end);if(d!==null&&d<minDays)minDays=d;});
+    var isActive=(mi===calMonth);
+    var isCurReal=(calYear===today.getFullYear()&&mi===today.getMonth());
+    var barColor=count===0?'var(--border)':minDays<=7?'var(--red)':minDays<=30?'var(--orange)':minDays<=60?'var(--yellow)':'var(--accent)';
+    var barH=count===0?2:Math.max(6,Math.round((count/maxCount)*36));
+
+    var cell=document.createElement('div');
+    cell.className='year-month-cell'+(isActive?' active':'');
+
+    var lbl=mk('div','',mn);
+    lbl.style.cssText='font-size:11px;font-weight:'+(isCurReal?'700':'500')+';color:'+(isCurReal?'var(--accent)':'var(--text2)')+';margin-bottom:5px;';
+
+    var barArea=mk('div');
+    barArea.style.cssText='height:38px;display:flex;align-items:flex-end;justify-content:center;';
+    var bar=mk('div');
+    bar.style.cssText='width:20px;border-radius:3px 3px 0 0;background:'+barColor+';height:'+barH+'px;transition:height .25s;';
+    barArea.appendChild(bar);
+
+    var cntLbl=mk('div','',count?''+count:'·');
+    cntLbl.style.cssText='font-size:10px;color:'+(count?barColor:'var(--border)')+';margin-top:3px;font-family:JetBrains Mono,monospace;font-weight:600;';
+
+    cell.appendChild(lbl); cell.appendChild(barArea); cell.appendChild(cntLbl);
+    cell.onclick=(function(m){return function(){
+      calMonth=m; calSelectedDay=null;
+      renderYearStrip(); renderCalGrid(); renderCalExpiring();
+    };})(mi);
+    el.appendChild(cell);
+  });
+}
+
+// ── Micro: Month calendar grid ──
 function renderCalGrid(){
-  var grid = q('cal-grid'); if(!grid) return;
-  // Keep the header labels, rebuild day cells
-  var labels = Array.from(grid.querySelectorAll('.cal-day-label'));
-  grid.innerHTML = '';
-  labels.forEach(function(l){ grid.appendChild(l.cloneNode(true)); });
+  var grid=q('cal-grid'); if(!grid) return;
+  var labels=Array.from(grid.querySelectorAll('.cal-day-label'));
+  grid.innerHTML='';
+  labels.forEach(function(l){grid.appendChild(l.cloneNode(true));});
 
-  var monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  var monthNames=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
   setText('cal-month-label', calYear+'年 '+monthNames[calMonth]);
 
-  // Build set of expiring dates this month (key: YYYY-MM-DD)
-  var expiryDates = {};
+  // Build map: YYYY-MM-DD → [contract, ...]
+  var dayMap={};
   C.forEach(function(c){
-    if(!c.end) return;
-    var d = daysTo(c.end);
-    if(d === null) return;
-    // Mark if it falls in displayed month
-    var ed = new Date(c.end);
-    if(ed.getFullYear()===calYear && ed.getMonth()===calMonth){
-      var key = c.end;
-      if(!expiryDates[key] || d < expiryDates[key]) expiryDates[key] = d;
+    if(!c.end)return;
+    var ed=new Date(c.end);
+    if(ed.getFullYear()===calYear&&ed.getMonth()===calMonth){
+      if(!dayMap[c.end])dayMap[c.end]=[];
+      dayMap[c.end].push(c);
     }
   });
 
-  var today = new Date(); today.setHours(0,0,0,0);
-  var firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
-  var daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  var today=new Date(); today.setHours(0,0,0,0);
+  var firstDay=new Date(calYear,calMonth,1).getDay();
+  var daysInMonth=new Date(calYear,calMonth+1,0).getDate();
 
-  // Empty cells before first day
-  for(var i=0; i<firstDay; i++){
-    grid.appendChild(mk('div','cal-day'));
+  for(var i=0;i<firstDay;i++){
+    var blank=mk('div','cal-cell other-month'); grid.appendChild(blank);
   }
 
-  for(var day=1; day<=daysInMonth; day++){
-    var cell = mk('div','cal-day', String(day));
-    var dateStr = calYear+'-'+pad2(calMonth+1)+'-'+pad2(day);
-    var cellDate = new Date(calYear, calMonth, day); cellDate.setHours(0,0,0,0);
-    if(cellDate.getTime()===today.getTime()) cell.classList.add('today');
-    // Check if any contract expires on this day
-    if(expiryDates[dateStr] !== undefined){
-      var d = expiryDates[dateStr];
-      cell.classList.add('has-event');
-      if(d<=7) cell.querySelector && (cell.style.setProperty('--dot-color','var(--red)'));
-      // Override dot color via inline style on ::after - use data attr
-      cell.dataset.urgency = d<=7?'red':d<=30?'orange':'yellow';
-      // Apply color with a span trick
-      var dot = mk('span');
-      dot.style.cssText='position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:'+(d<=7?'var(--red)':d<=30?'var(--orange)':'var(--yellow)');
-      cell.style.position='relative';
-      // Remove default ::after and use span instead
-      cell.classList.remove('has-event'); // remove the css ::after
-      cell.appendChild(dot);
+  for(var day=1;day<=daysInMonth;day++){
+    var dateStr=calYear+'-'+pad2(calMonth+1)+'-'+pad2(day);
+    var cellDate=new Date(calYear,calMonth,day); cellDate.setHours(0,0,0,0);
+    var isToday=cellDate.getTime()===today.getTime();
+    var isSel=calSelectedDay===dateStr;
+    var cell=mk('div','cal-cell'+(isToday?' today':'')+(isSel?' selected':''));
+
+    var numSpan=mk('span','cal-cell-num',''+day);
+    cell.appendChild(numSpan);
+
+    var contracts=dayMap[dateStr]||[];
+    contracts.slice(0,3).forEach(function(c){
+      var d=daysTo(c.end);
+      var urgCls=d!==null&&d<=7?'urg-red':d!==null&&d<=30?'urg-orange':d!==null&&d<=60?'urg-yellow':'urg-gray';
+      var tag=mk('span','cal-tag '+urgCls, c.name);
+      tag.title=c.name+(c.counterparty?' · '+c.counterparty:'');
+      tag.onclick=(function(cc){return function(e){e.stopPropagation();openContractDetail(cc);};})(c);
+      cell.appendChild(tag);
+    });
+    if(contracts.length>3){
+      var more=mk('span','cal-tag urg-gray','+'+( contracts.length-3)+' more');
+      cell.appendChild(more);
     }
+
+    cell.onclick=(function(ds,cs){return function(){
+      calSelectedDay=(calSelectedDay===ds?null:ds);
+      renderCalGrid();
+      renderCalExpiring(cs.length?ds:null);
+    };})(dateStr,contracts);
+
     grid.appendChild(cell);
   }
 }
 
-function renderCalExpiring(){
-  var el = q('calendar-expiring-list'); if(!el) return;
-  el.innerHTML = '';
-  var title = mk('div','card-title', calYear+'年 '+( calMonth+1)+'月 到期事项');
+// ── Micro: Contract list (month or selected day) ──
+function renderCalExpiring(selectedDay){
+  var el=q('calendar-expiring-list'); if(!el) return;
+  el.innerHTML='';
+  var monthNames=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+  var titleTxt=selectedDay?
+    calYear+'年'+pad2(calMonth+1)+'月'+pad2(parseInt(selectedDay.split('-')[2]))+'日':
+    calYear+'年 '+monthNames[calMonth]+' 到期事项';
+  var title=mk('div','',titleTxt);
+  title.style.cssText='font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text);';
   el.appendChild(title);
 
-  // Get contracts expiring in displayed month
-  var monthContracts = C.filter(function(c){
-    if(!c.end) return false;
-    var ed = new Date(c.end);
-    return ed.getFullYear()===calYear && ed.getMonth()===calMonth;
-  }).sort(function(a,b){ return new Date(a.end)-new Date(b.end); });
+  var contracts;
+  if(selectedDay){
+    contracts=C.filter(function(c){return c.end===selectedDay;});
+  } else {
+    contracts=C.filter(function(c){
+      if(!c.end)return false;
+      var ed=new Date(c.end);
+      return ed.getFullYear()===calYear&&ed.getMonth()===calMonth;
+    }).sort(function(a,b){return new Date(a.end)-new Date(b.end);});
+  }
 
-  if(!monthContracts.length){
-    var em = mk('div','','本月无到期合同'); em.style.cssText='text-align:center;padding:20px;color:var(--text3);font-size:13px';
+  if(!contracts.length){
+    var em=mk('div','',selectedDay?'当日无到期合同':'本月无到期合同');
+    em.style.cssText='text-align:center;padding:28px 10px;color:var(--text3);font-size:13px;';
     el.appendChild(em); return;
   }
 
-  monthContracts.forEach(function(c){
-    var d = daysTo(c.end);
-    var col = d!==null&&d<=7?'var(--red)':d!==null&&d<=30?'var(--orange)':'var(--yellow)';
-    var row = mk('div','alert-item');
-    var dot = mk('div','alert-dot'); dot.style.background=col;
-    var inf = mk('div');
-    var nm = mk('div','alert-name',c.name);
-    var ai = mk('div','alert-info', d===null?'已过期': d===0?'今天到期': d<0?Math.abs(d)+'天前已过期': d+'天后到期');
-    inf.appendChild(nm); inf.appendChild(ai);
-    var dt = mk('div','alert-date', c.end);
-    row.appendChild(dot); row.appendChild(inf); row.appendChild(dt);
-    el.appendChild(row);
+  // Group by urgency
+  var groups=[
+    {key:'red',label:'紧急 (7天内)',color:'var(--red)',filter:function(c){var d=daysTo(c.end);return d!==null&&d<=7;}},
+    {key:'orange',label:'即将 (8–30天)',color:'var(--orange)',filter:function(c){var d=daysTo(c.end);return d!==null&&d>7&&d<=30;}},
+    {key:'yellow',label:'留意 (31–60天)',color:'var(--yellow)',filter:function(c){var d=daysTo(c.end);return d!==null&&d>30&&d<=60;}},
+    {key:'gray',label:'更远 / 已过期',color:'var(--text3)',filter:function(c){var d=daysTo(c.end);return d===null||d>60;}}
+  ];
+
+  groups.forEach(function(g){
+    var gc=contracts.filter(g.filter);
+    if(!gc.length)return;
+    var grpDiv=mk('div','cal-urgency-group');
+    var glbl=mk('div','cal-urgency-label');
+    var dot=mk('span');dot.style.cssText='width:7px;height:7px;border-radius:50%;background:'+g.color+';display:inline-block;flex-shrink:0;';
+    glbl.appendChild(dot);glbl.appendChild(mk('span','',g.label));
+    grpDiv.appendChild(glbl);
+    gc.forEach(function(c){
+      var d=daysTo(c.end);
+      var row=mk('div','cal-list-row');
+      row.onclick=function(){openContractDetail(c);};
+      var left=mk('div');left.style.cssText='flex:1;min-width:0;';
+      var nm=mk('div','',c.name);nm.style.cssText='font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      var sub=mk('div','',( c.entity||c.brand||'')+(c.counterparty?' · '+c.counterparty:''));
+      sub.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      left.appendChild(nm);left.appendChild(sub);
+      var right=mk('div');right.style.cssText='text-align:right;flex-shrink:0;';
+      var daysTxt=d===null?'已过期':d===0?'今天':d<0?Math.abs(d)+'天前':''+d+'天后';
+      var dtxt=mk('div','',daysTxt);dtxt.style.cssText='font-size:11px;font-weight:600;color:'+g.color+';';
+      var dateTxt=mk('div','',c.end);dateTxt.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;font-family:JetBrains Mono,monospace;';
+      right.appendChild(dtxt);right.appendChild(dateTxt);
+      row.appendChild(left);row.appendChild(right);
+      grpDiv.appendChild(row);
+    });
+    el.appendChild(grpDiv);
   });
+
+  // Summary line
+  var sum=mk('div','','共 '+contracts.length+' 份合同');
+  sum.style.cssText='margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:10px;color:var(--text3);text-align:right;';
+  el.appendChild(sum);
 }
 
 // ── Alerts (dynamic, from real contract data) ────────────
