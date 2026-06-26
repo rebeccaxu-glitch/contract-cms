@@ -879,7 +879,7 @@ function openFromStorage(storageUrl, fileType, fileName){
 // ═══════════════════════════════════════════════════════
 
 // ── Storage keys ──────────────────────────────────────
-var SK = { C:'cms_c', E:'cms_e', T:'cms_t', M:'cms_m', BRANDS:'cms_brands_v1' };
+var SK = { C:'cms_c', E:'cms_e', T:'cms_t', M:'cms_m', BRANDS:'cms_brands_v1', IC_TYPES:'cms_ic_types_v1' };
 
 // ── Default data ───────────────────────────────────────
 var DEF_C = [
@@ -978,12 +978,23 @@ var BRANDS = (function(){
 })();
 var BRAND_COLORS=['#1d9e75','#378add','#d85a30','#7f77dd','#ba7517','#d4537e','#639922','#534ab7','#2a7a8a','#8a5a2a'];
 
+// ── Intercompany agreement types (editable, persisted) ─
+var IC_TYPES_DEFAULT=[
+  {key:'service',name:'Service agreement'},
+  {key:'outsourcing',name:'Outsourcing'},
+  {key:'loan',name:'Intercompany loan'},
+  {key:'ip',name:'IP / Licence'},
+  {key:'cost',name:'Cost allocation'}
+];
+var IC_TYPES=(function(){var s=load(SK.IC_TYPES);return(s&&s.length)?s:JSON.parse(JSON.stringify(IC_TYPES_DEFAULT));})();
+
 // ── State ──────────────────────────────────────────────
 var C, E, T, M;
 var curFilter       = 'all';
 var curView         = 'all';      // 'all' | 'external' | 'intercompany'
 var curBrandFilter  = null;
 var curEntityFilter = null;
+var curIcType       = null;       // selected IC agreement type key
 var curIcEntity     = null;       // selected entity in intercompany tree
 var curIcCp         = null;       // selected counterparty in intercompany tree
 var collapsedBrands = {};
@@ -1084,7 +1095,7 @@ function isIntercompanyContract(c){
 // ── View switching (All / External / Intercompany) ──────
 function setView(view){
   curView=view;
-  curBrandFilter=null;curEntityFilter=null;curIcEntity=null;curIcCp=null;
+  curBrandFilter=null;curEntityFilter=null;curIcType=null;curIcEntity=null;curIcCp=null;
   // Switch to contracts page
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var pg=q('page-contracts');if(pg)pg.classList.add('active');
@@ -1117,34 +1128,113 @@ function updateNavCounts(){
 function renderIcTree(){
   var il=q('ic-list');if(!il)return;
   il.innerHTML='';
-  var icContracts=(C||[]).filter(isIntercompanyContract);
-  // Group by c.entity (our entity) → c.counterparty
+  var allIc=(C||[]).filter(isIntercompanyContract);
+
+  // ── Section 1: Agreement types (editable) ──
+  var typeSection=document.createElement('div');
+  typeSection.style.cssText='padding:4px 0 2px;';
+
+  // "All" row
+  var allRow=document.createElement('div');
+  allRow.className='ic-cp-row'+(curIcType===null?' active':'');
+  allRow.style.cssText='padding-left:22px;display:flex;align-items:center;gap:5px;';
+  var allDot=mk('span','','◻');allDot.style.cssText='font-size:10px;color:var(--text3);';
+  var allLbl=mk('span','','All types');allLbl.style.cssText='flex:1;font-size:11px;';
+  var allCnt=mk('span','brand-cnt',''+allIc.length);
+  allRow.appendChild(allDot);allRow.appendChild(allLbl);allRow.appendChild(allCnt);
+  allRow.onclick=function(e){e.stopPropagation();curIcType=null;curIcEntity=null;curIcCp=null;renderIcTree();renderContracts();};
+  typeSection.appendChild(allRow);
+
+  // Each IC type (inline editable)
+  IC_TYPES.forEach(function(t,ti){
+    var typeCnt=allIc.filter(function(c){return c.icType===t.key;}).length;
+    var tRow=document.createElement('div');
+    tRow.className='ic-cp-row'+(curIcType===t.key?' active':'');
+    tRow.style.cssText='padding-left:22px;display:flex;align-items:center;gap:5px;';
+
+    var tLbl=mk('span','',t.name);tLbl.style.cssText='flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;';
+    tLbl.onclick=(function(tk){return function(e){e.stopPropagation();curIcType=tk;curIcEntity=null;curIcCp=null;renderIcTree();renderContracts();};})(t.key);
+
+    var editT=mk('span','','✎');
+    editT.style.cssText='font-size:10px;color:var(--text3);cursor:pointer;opacity:0;flex-shrink:0;transition:opacity .15s;';
+    editT.onclick=(function(ti2,lbl){return function(e){
+      e.stopPropagation();
+      var inp=document.createElement('input');inp.type='text';inp.value=IC_TYPES[ti2].name;
+      inp.style.cssText='flex:1;min-width:0;border:1px solid var(--accent);border-radius:3px;padding:1px 5px;font-size:11px;background:var(--surface2);color:var(--text);';
+      tRow.replaceChild(inp,lbl);editT.style.display='none';inp.focus();inp.select();
+      function done(){var v=inp.value.trim();if(v)IC_TYPES[ti2].name=v;save(SK.IC_TYPES,IC_TYPES);renderIcTree();refreshIcTypeDropdown();}
+      inp.onblur=done;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value=IC_TYPES[ti2].name;inp.blur();}};
+    };})(ti,tLbl);
+
+    var delT=mk('span','','×');
+    delT.style.cssText='font-size:12px;color:var(--text3);cursor:pointer;opacity:0;flex-shrink:0;transition:opacity .15s;';
+    delT.onclick=(function(ti2,tn){return function(e){
+      e.stopPropagation();
+      if(confirm('Delete type "'+tn+'"?')){IC_TYPES.splice(ti2,1);save(SK.IC_TYPES,IC_TYPES);if(curIcType===IC_TYPES[ti2]&&IC_TYPES[ti2])curIcType=null;renderIcTree();refreshIcTypeDropdown();}
+    };})(ti,t.name);
+
+    var tCnt=mk('span','brand-cnt',typeCnt?''+typeCnt:'');
+    tRow.appendChild(tLbl);tRow.appendChild(editT);tRow.appendChild(delT);tRow.appendChild(tCnt);
+    tRow.onmouseover=function(){editT.style.opacity='1';delT.style.opacity='1';};
+    tRow.onmouseout=function(){editT.style.opacity='0';delT.style.opacity='0';};
+    typeSection.appendChild(tRow);
+  });
+
+  // Add type button
+  var addType=document.createElement('div');
+  addType.style.cssText='padding:3px 10px 3px 22px;cursor:pointer;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:3px;';
+  addType.innerHTML='<span style="font-size:13px;line-height:1;">＋</span><span>Add type</span>';
+  addType.onmouseover=function(){this.style.color='var(--accent)';};
+  addType.onmouseout=function(){this.style.color='var(--text3)';};
+  addType.onclick=function(e){
+    e.stopPropagation();
+    var inp=document.createElement('input');inp.type='text';inp.placeholder='Type name…';
+    inp.style.cssText='width:calc(100% - 22px);margin:3px 10px 3px 22px;border:1px solid var(--accent);border-radius:3px;padding:2px 6px;font-size:11px;background:var(--surface2);color:var(--text);box-sizing:border-box;';
+    typeSection.insertBefore(inp,addType);inp.focus();
+    function doAdd(){
+      var v=inp.value.trim();
+      if(v){var key='ic_'+Date.now();IC_TYPES.push({key:key,name:v});save(SK.IC_TYPES,IC_TYPES);refreshIcTypeDropdown();}
+      renderIcTree();
+    }
+    inp.onblur=doAdd;inp.onkeydown=function(ev){if(ev.key==='Enter')inp.blur();if(ev.key==='Escape'){inp.value='';inp.blur();}};
+  };
+  typeSection.appendChild(addType);
+  il.appendChild(typeSection);
+
+  // ── Divider ──
+  var div=document.createElement('div');
+  div.style.cssText='height:0.5px;background:var(--border);margin:6px 10px;';
+  il.appendChild(div);
+
+  // ── Section 2: Entity → Counterparty tree ──
+  var filteredIc=curIcType?allIc.filter(function(c){return c.icType===curIcType;}):allIc;
   var entMap={};var entOrder=[];
-  icContracts.forEach(function(c){
+  filteredIc.forEach(function(c){
     var ek=c.entity||'(unassigned)';
     if(!entMap[ek]){entMap[ek]={flag:'',cps:{},cpOrder:[]};entOrder.push(ek);}
-    // Find flag for this entity
-    if(!entMap[ek].flag){
-      BRANDS.forEach(function(b){b.entities.forEach(function(e){if(e.name===ek)entMap[ek].flag=e.flag;});});
-    }
+    if(!entMap[ek].flag)BRANDS.forEach(function(b){b.entities.forEach(function(e){if(e.name===ek)entMap[ek].flag=e.flag;});});
     var cpk=c.counterparty||'(unknown)';
     if(!entMap[ek].cps[cpk]){entMap[ek].cps[cpk]=0;entMap[ek].cpOrder.push(cpk);}
     entMap[ek].cps[cpk]++;
   });
+
+  if(!entOrder.length){
+    var emp=mk('div','','No contracts in this category');
+    emp.style.cssText='padding:6px 14px;font-size:11px;color:var(--text3);';
+    il.appendChild(emp);return;
+  }
+
   entOrder.forEach(function(ek){
     var em=entMap[ek];
     var isOpen=!!collapsedIcEnts[ek];
-    // Entity row
     var eRow=document.createElement('div');
     eRow.className='ic-ent-row'+(curIcEntity===ek&&!curIcCp?' active':'');
     var chev=mk('span','',isOpen?'▾':'▸');chev.style.cssText='font-size:10px;color:var(--text3);flex-shrink:0;';
     var flag=mk('span','',em.flag||'🏢');flag.style.cssText='font-size:11px;flex-shrink:0;';
     var lbl=mk('span','',ek);lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    var cnt=mk('span','brand-cnt',''+icContracts.filter(function(c){return (c.entity||'(unassigned)')===ek;}).length);
+    var cnt=mk('span','brand-cnt',''+filteredIc.filter(function(c){return(c.entity||'(unassigned)')===ek;}).length);
     eRow.appendChild(chev);eRow.appendChild(flag);eRow.appendChild(lbl);eRow.appendChild(cnt);
-    // Counterparty wrapper
-    var cpWrap=document.createElement('div');
-    cpWrap.className='ic-cp-wrap';
+    var cpWrap=document.createElement('div');cpWrap.className='ic-cp-wrap';
     if(isOpen)cpWrap.style.display='block';
     em.cpOrder.forEach(function(cpk){
       var cpRow=document.createElement('div');
@@ -1160,19 +1250,12 @@ function renderIcTree(){
     });
     eRow.onclick=(function(ek2,cw,ch){return function(e){
       e.stopPropagation();
-      var nowOpen=!collapsedIcEnts[ek2];
-      collapsedIcEnts[ek2]=nowOpen;
-      cw.style.display=nowOpen?'block':'none';
-      ch.textContent=nowOpen?'▾':'▸';
+      var nowOpen=!collapsedIcEnts[ek2];collapsedIcEnts[ek2]=nowOpen;
+      cw.style.display=nowOpen?'block':'none';ch.textContent=nowOpen?'▾':'▸';
       curIcEntity=ek2;curIcCp=null;renderIcTree();renderContracts();
     };})(ek,cpWrap,chev);
     il.appendChild(eRow);il.appendChild(cpWrap);
   });
-  if(!entOrder.length){
-    var empty=mk('div','','No intercompany contracts yet');
-    empty.style.cssText='padding:8px 14px;font-size:11px;color:var(--text3);';
-    il.appendChild(empty);
-  }
 }
 
 function navTo(pid){
@@ -1499,6 +1582,16 @@ function setCfAutoRenewal(v){
   if(y)y.classList.toggle('selected',v);
   if(n)n.classList.toggle('selected',!v);
 }
+// ── Intercompany type dropdown (dynamic) ────────────────
+function refreshIcTypeDropdown(){
+  var sel=q('cf-ic-type');if(!sel)return;
+  var cur=sel.value;
+  sel.innerHTML='<option value="">— Select type —</option>';
+  IC_TYPES.forEach(function(t){
+    var o=document.createElement('option');o.value=t.key;o.textContent=t.name;sel.appendChild(o);
+  });
+  sel.value=cur;
+}
 // ── Intercompany toggle ──────────────────────────────────
 var cfIsIC=false;
 function setCfIC(v){
@@ -1663,7 +1756,8 @@ function renderContracts(){
   if(curBrandFilter)filtered=filtered.filter(function(c){return c.brand===curBrandFilter;});
   if(curEntityFilter)filtered=filtered.filter(function(c){return c.entity===curEntityFilter;});
 
-  // Apply intercompany entity/counterparty filter
+  // Apply intercompany type/entity/counterparty filters
+  if(curIcType)filtered=filtered.filter(function(c){return c.icType===curIcType;});
   if(curIcEntity)filtered=filtered.filter(function(c){return(c.entity||'(unassigned)')===curIcEntity;});
   if(curIcCp)filtered=filtered.filter(function(c){return(c.counterparty||'(unknown)')===curIcCp;});
 
@@ -1999,6 +2093,7 @@ function openContractForm(id){
   setVal('cf-notes',c?c.notes||'':'');
   // Intercompany — auto-detect then apply manual override if set
   var icVal=c&&c.isIntercompany!==undefined?c.isIntercompany:isIntercompanyContract(c||{counterparty:getVal('cf-party')});
+  refreshIcTypeDropdown();
   setCfIC(icVal);
   setOpt('cf-ic-type',c?c.icType||'':'');
   openModal('modal-contract-form');
