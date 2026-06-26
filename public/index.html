@@ -922,7 +922,22 @@ var BRANDS_DEFAULT = [
     {flag:'🇸🇬', name:'Magic Papaya Pte. Ltd.'}
   ]}
 ];
-var BRANDS = (function(){var s=load(SK.BRANDS);return(s&&s.length)?s:JSON.parse(JSON.stringify(BRANDS_DEFAULT));})();
+var BRANDS = (function(){
+  var s=load(SK.BRANDS);
+  if(!s||!s.length) return JSON.parse(JSON.stringify(BRANDS_DEFAULT));
+  // Merge: ensure all default brands and their entities exist
+  BRANDS_DEFAULT.forEach(function(def){
+    var existing=null;
+    for(var i=0;i<s.length;i++){if(s[i].key===def.key){existing=s[i];break;}}
+    if(!existing){s.push(JSON.parse(JSON.stringify(def)));return;}
+    // Ensure all default entities exist in this brand
+    def.entities.forEach(function(de){
+      var hasEnt=existing.entities&&existing.entities.some(function(e){return e.name===de.name;});
+      if(!hasEnt){if(!existing.entities)existing.entities=[];existing.entities.push({flag:de.flag,name:de.name});}
+    });
+  });
+  return s;
+})();
 var BRAND_COLORS=['#1d9e75','#378add','#d85a30','#7f77dd','#ba7517','#d4537e','#639922','#534ab7','#2a7a8a','#8a5a2a'];
 
 // ── State ──────────────────────────────────────────────
@@ -1103,17 +1118,17 @@ function renderBrandTree(){
 function selectBrandAll(){
   curBrandFilter=null;curEntityFilter=null;
   document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.add('active');});
-  renderBrandTree();renderContracts();
+  navTo('contracts');
 }
 function selectBrand(key){
   curBrandFilter=key;curEntityFilter=null;
   document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
-  renderBrandTree();renderContracts();
+  navTo('contracts');
 }
 function selectEntity(brandKey,entityName){
   curBrandFilter=brandKey;curEntityFilter=entityName;
   document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
-  renderBrandTree();renderContracts();
+  navTo('contracts');
 }
 
 // ── Brand Manager ───────────────────────────────────────
@@ -1399,9 +1414,8 @@ function renderContracts(){
   if(curBrandFilter)filtered=filtered.filter(function(c){return c.brand===curBrandFilter;});
   if(curEntityFilter){
     var strictMatch=filtered.filter(function(c){return c.entity===curEntityFilter;});
-    // Fall back: also show brand-level contracts with no entity assigned yet
-    var unassigned=filtered.filter(function(c){return !c.entity&&c.brand===curBrandFilter;});
-    filtered=strictMatch.length?strictMatch:unassigned;
+    // Fall back: show all brand-level contracts if none are assigned to this entity yet
+    filtered=strictMatch.length?strictMatch:filtered;
   }
 
   var listEl=q('contracts-list');
