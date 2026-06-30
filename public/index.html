@@ -2259,7 +2259,14 @@ function saveContract(){
     return;
   }
   var idx=C.findIndex(function(x){return x.id===editCid;});
-  if(idx!==-1){data.versions=C[idx].versions||[];C[idx]=data;}
+  if(idx!==-1){
+    data.versions=C[idx].versions||[];
+    // Preserve Drive-specific and computed fields not present in the edit form
+    var _preserve=['driveFileId','driveFileName','driveScannedAt','driveScanned',
+      'brandResolved','aiConfidence','hasSigned','createdAt','status'];
+    _preserve.forEach(function(k){if(C[idx][k]!==undefined)data[k]=C[idx][k];});
+    C[idx]=data;
+  }
   save(SK.C,C);closeModal('modal-contract-form');renderContracts();renderDashboard();renderBrandTree();updateNavCounts();
 }
 

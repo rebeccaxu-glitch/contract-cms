@@ -300,7 +300,7 @@ async function extractWithClaude(fileBuffer, mimeType, fileName) {
     const text = result.value.slice(0, 12000); // trim to ~3k tokens
     contentParts.push({ type: 'text', text: `Contract text:\n${text}` });
   } else {
-    contentParts.push({ type: 'text', text: `Unable to read file. Filename: "${fileName}". Please extract what you can from the filename only.` });
+    contentParts.push({ type: 'text', text: `Unable to read file content. Filename: "${fileName}". Return null for all date fields — do not guess dates from the filename.` });
   }
 
   const fileHint = hasSignedKeyword(fileName)
@@ -321,8 +321,8 @@ Analyse this contract and return ONLY a valid JSON object (no markdown, no expla
   "ourEntityJurisdiction": "our entity country/jurisdiction of incorporation (2-letter ISO code preferred) or null",
   "type": "external or intercompany",
   "contractType": "e.g. Service Agreement, NDA, Employment Contract, Lease, Loan Agreement",
-  "startDate": "YYYY-MM-DD or null",
-  "endDate": "YYYY-MM-DD or null",
+  "startDate": "YYYY-MM-DD — extract from the contract body (signing date, effective date, or commencement date as stated in the document). Do NOT infer from the filename. Return null if no date is found in the document.",
+  "endDate": "YYYY-MM-DD — extract from the contract body (expiry or termination date as stated in the document). Do NOT infer from the filename. Return null if not found.",
   "value": number or null,
   "currency": "SGD/USD/CNY/HKD/AUD or null",
   "autoRenew": true or false or null,
