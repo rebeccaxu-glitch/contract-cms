@@ -755,6 +755,45 @@ app.get('/api/drive/migrate-fields', async (req, res) => {
   }
 });
 
+// GET /api/migrate-ids — reassign all contract IDs to date-based format (YYYYMMDDNN)
+app.get('/api/migrate-ids', async (req, res) => {
+  try {
+    const doc = await db.collection('cms').doc('contracts').get();
+    if (!doc.exists) return res.json({ ok: true, migrated: 0 });
+    const contracts = doc.data().data || [];
+
+    // Sort by start date, then counterparty alphabetically for same-day ordering
+    const sorted = [...contracts].sort((a, b) => {
+      const da = (a.start || a.createdAt || '').slice(0, 10);
+      const db2 = (b.start || b.createdAt || '').slice(0, 10);
+      if (da !== db2) return da < db2 ? -1 : 1;
+      return (a.party || '').toLowerCase() < (b.party || '').toLowerCase() ? -1 : 1;
+    });
+
+    // Assign new IDs — track counter per date prefix
+    const dayCount = {};
+    const updated = sorted.map(c => {
+      let d;
+      const dateStr = c.start || (c.createdAt ? c.createdAt.slice(0, 10) : '');
+      if (dateStr) {
+        d = dateStr.replace(/-/g, '').slice(0, 8);
+      } else {
+        const n = new Date();
+        d = String(n.getFullYear()) + String(n.getMonth()+1).padStart(2,'0') + String(n.getDate()).padStart(2,'0');
+      }
+      dayCount[d] = (dayCount[d] || 0) + 1;
+      const newId = d + String(dayCount[d]).padStart(2, '0');
+      return { ...c, id: newId };
+    });
+
+    await db.collection('cms').doc('contracts').set({ data: updated });
+    res.json({ ok: true, total: contracts.length, migrated: updated.length, sample: updated.slice(0,5).map(c=>c.id) });
+  } catch(e) {
+    console.error('migrate-ids error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ── 启动 ─────────────────────────────────────────────────
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
