@@ -1359,6 +1359,8 @@ function renderBrandTree(){
         var ec=C.filter(function(c){return c.brand===brand.key&&c.entity===ent.name;}).length;
         var eRow=document.createElement('div');
         eRow.className='entity-row'+(curEntityFilter===ent.name&&curBrandFilter===brand.key?' active':'');
+        eRow.dataset.brandKey=brand.key;
+        eRow.dataset.entityName=ent.name;
         eRow.style.position='relative';
 
         var flag=mk('span','',ent.flag);
@@ -1429,6 +1431,7 @@ function renderBrandTree(){
     // ── Brand row ──
     var bRow=document.createElement('div');
     bRow.className='brand-row'+(curBrandFilter===brand.key&&!curEntityFilter?' active':'');
+    bRow.dataset.brandKey=brand.key;
 
     var chev=mk('span','brand-chevron',isOpen?'▾':'▸');
     var dot=mk('span','brand-dot','');dot.style.background=brand.color;
@@ -1459,11 +1462,15 @@ function renderBrandTree(){
 
     bRow.onclick=(function(bk,ew,ch){return function(e){
       e.stopPropagation();
+      // Expand/collapse without rebuilding the tree
       var nowOpen=!collapsedBrands[bk];
       collapsedBrands[bk]=nowOpen;
       ew.style.display=nowOpen?'block':'none';
       ch.textContent=nowOpen?'▾':'▸';
-      selectBrand(bk);
+      // Filter contracts to this brand directly (no navTo/renderBrandTree)
+      curView='external';curBrandFilter=bk;curEntityFilter=null;curIcEntity=null;curIcCp=null;
+      _refreshSidebarActive();
+      renderContracts();updateNavCounts();
     };})(brand.key,entWrap,chev);
 
     bl.appendChild(bRow);
@@ -1488,18 +1495,36 @@ function renderBrandTree(){
 
 function selectBrandAll(){
   curView='external';curBrandFilter=null;curEntityFilter=null;curIcEntity=null;curIcCp=null;
-  document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.add('active');});
-  navTo('contracts');
+  _refreshSidebarActive();
+  if(q('page-contracts')&&q('page-contracts').classList.contains('active')){
+    renderContracts();updateNavCounts();
+  } else { navTo('contracts'); }
 }
 function selectBrand(key){
   curView='external';curBrandFilter=key;curEntityFilter=null;curIcEntity=null;curIcCp=null;
-  document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
-  navTo('contracts');
+  _refreshSidebarActive();
+  if(q('page-contracts')&&q('page-contracts').classList.contains('active')){
+    renderContracts();updateNavCounts();
+  } else { navTo('contracts'); }
 }
 function selectEntity(brandKey,entityName){
   curView='external';curBrandFilter=brandKey;curEntityFilter=entityName;curIcEntity=null;curIcCp=null;
-  document.querySelectorAll('.brand-all-row').forEach(function(r){r.classList.remove('active');});
-  navTo('contracts');
+  _refreshSidebarActive();
+  if(q('page-contracts')&&q('page-contracts').classList.contains('active')){
+    renderContracts();updateNavCounts();
+  } else { navTo('contracts'); }
+}
+// Update active CSS on sidebar rows without rebuilding the DOM
+function _refreshSidebarActive(){
+  document.querySelectorAll('.brand-all-row').forEach(function(r){
+    r.classList.toggle('active',!curBrandFilter&&!curEntityFilter);
+  });
+  document.querySelectorAll('.brand-row').forEach(function(r){
+    r.classList.toggle('active',r.dataset.brandKey===curBrandFilter&&!curEntityFilter);
+  });
+  document.querySelectorAll('.entity-row').forEach(function(r){
+    r.classList.toggle('active',r.dataset.brandKey===curBrandFilter&&r.dataset.entityName===curEntityFilter);
+  });
 }
 
 // ── Brand Manager ───────────────────────────────────────
