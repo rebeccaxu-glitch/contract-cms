@@ -4436,41 +4436,84 @@ q('searchInput').addEventListener('input',function(){
   var qv=this.value.trim().toLowerCase();
   if(!qv){renderContracts();return;}
   navTo('contracts');
-  var f=C.filter(function(c){return c.name.toLowerCase().includes(qv)||c.party.toLowerCase().includes(qv)||c.id.toLowerCase().includes(qv);});
+  var f=C.filter(function(c){
+    var party=(c.party||c.counterparty||'').toLowerCase();
+    return (c.name||'').toLowerCase().includes(qv)
+        || party.includes(qv)
+        || (c.id||'').toLowerCase().includes(qv)
+        || (c.entity||'').toLowerCase().includes(qv)
+        || (c.type||'').toLowerCase().includes(qv);
+  });
   var listEl=q('contracts-list');var empty=q('contracts-empty');
   if(!f.length){listEl.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';listEl.innerHTML='';
-  // Render flat results (no grouping during search)
+
+  // Build brand color/name lookup
+  var brandMeta={};
+  BRANDS.forEach(function(b){brandMeta[b.key]={name:b.name,color:b.color};});
+
+  // Grid: Name | Brand | Counterparty | Type | Status | Start | End | Actions
+  var GRID='2fr 90px 1.2fr 100px 72px 88px 88px 150px';
+  var HEADERS=['合同名称','Brand','对方当事人','类型','状态','签署日期','到期日期','操作'];
+
   var resultCard=document.createElement('div');
   resultCard.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;';
+
   var colHdr=document.createElement('div');
-  colHdr.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:6px 14px;background:var(--surface2);';
-  ['合同名称','对方当事人','类型','状态','签署日期','到期日期','操作'].forEach(function(label,i){
+  colHdr.style.cssText='display:grid;grid-template-columns:'+GRID+';gap:8px;padding:6px 14px;background:var(--surface2);';
+  HEADERS.forEach(function(label,i){
     var ch=document.createElement('div');ch.textContent=label;
-    ch.style.cssText='font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.3px;'+(i===6?'text-align:right':'');
+    ch.style.cssText='font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.3px;'+(i===7?'text-align:right':'');
     colHdr.appendChild(ch);
   });
   resultCard.appendChild(colHdr);
+
   f.forEach(function(c){
+    var _party=c.party||c.counterparty||'—';
+    var _start=c.start||c.startDate||'—';
+    var _end=c.end||c.endDate||'—';
+    var bm=c.brand&&brandMeta[c.brand];
+
     var row=document.createElement('div');
-    row.style.cssText='display:grid;grid-template-columns:2fr 1.4fr 80px 80px 90px 90px 110px;gap:8px;padding:9px 14px;border-top:1px solid var(--border);align-items:center;font-size:13px;cursor:pointer;';
+    row.style.cssText='display:grid;grid-template-columns:'+GRID+';gap:8px;padding:9px 14px;border-top:1px solid var(--border);align-items:center;font-size:12px;cursor:pointer;';
     row.onmouseover=function(){this.style.background='var(--surface2)';};
     row.onmouseout=function(){this.style.background='';};
     row.onclick=function(){openContractDetail(c.id);};
+
+    // Name + ID
     var colName=document.createElement('div');
-    var nm=mk('div','cn',c.name);nm.style.cssText='font-weight:600;color:var(--text);font-size:13px;';
-    var cid=mk('div','cid',c.id);cid.style.cssText='font-size:11px;color:var(--text3);margin-top:1px;';
+    var nm=mk('div','cn',c.name);nm.style.cssText='font-weight:600;color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    var cid=mk('div','cid',c.id);cid.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;';
     colName.appendChild(nm);colName.appendChild(cid);
-    var colParty=document.createElement('div');colParty.textContent=c.party||'--';colParty.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    var colType=document.createElement('div');colType.appendChild(mk('span','ct',c.type||'--'));
+
+    // Brand tag
+    var colBrand=document.createElement('div');
+    if(bm){
+      var bdot=document.createElement('span');bdot.style.cssText='display:inline-block;width:7px;height:7px;border-radius:50%;background:'+bm.color+';margin-right:4px;flex-shrink:0;';
+      var btxt=mk('span','',bm.name);btxt.style.cssText='font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      colBrand.style.cssText='display:flex;align-items:center;';
+      colBrand.appendChild(bdot);colBrand.appendChild(btxt);
+    } else {
+      colBrand.textContent='—';colBrand.style.cssText='font-size:11px;color:var(--border);';
+    }
+
+    var colParty=document.createElement('div');colParty.textContent=_party;colParty.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;';
+    var colType=document.createElement('div');colType.textContent=c.type||'—';colType.style.cssText='color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     var colStatus=document.createElement('div');var _cs=getComputedStatus(c);colStatus.appendChild(mk('span','badge '+(SB[_cs]||'b-active'),SL[_cs]||_cs));
-    var colStart=document.createElement('div');colStart.textContent=c.start||'--';colStart.style.cssText='color:var(--text2);font-size:12px;';
-    var colEnd=document.createElement('div');colEnd.textContent=c.end||'--';colEnd.style.cssText='color:var(--text2);font-size:12px;';
-    var colAct=document.createElement('div');colAct.style.cssText='display:flex;gap:4px;justify-content:flex-end;';
-    var bE=mk('button','act-btn','编辑');bE.onclick=function(e){e.stopPropagation();openContractForm(c.id);};
-    var bD=mk('button','act-btn del','删除');bD.onclick=function(e){e.stopPropagation();deleteContract(c.id);};
-    colAct.appendChild(bE);colAct.appendChild(bD);
-    [colName,colParty,colType,colStatus,colStart,colEnd,colAct].forEach(function(col){row.appendChild(col);});
+    var colStart=document.createElement('div');colStart.textContent=_start;colStart.style.cssText='color:var(--text2);font-size:11px;';
+    var colEnd=document.createElement('div');colEnd.textContent=_end;colEnd.style.cssText='color:var(--text2);font-size:11px;';
+
+    // Actions
+    var colAct=document.createElement('div');colAct.style.cssText='display:flex;gap:3px;justify-content:flex-end;';
+    function sBtn(label,title,cb){var b=mk('button','act-btn',label);b.title=title;b.onclick=function(e){e.stopPropagation();cb();};return b;}
+    if(c.driveFileId){
+      colAct.appendChild(sBtn('👁','Preview',function(){openFpm(c.driveFileId,'application/pdf',c.driveFileName||c.name);}));
+      colAct.appendChild(sBtn('⬇','Download',function(){fpmDownload_direct(c.driveFileId,c.driveFileName||c.name);}));
+    }
+    colAct.appendChild(sBtn('编辑','Edit',function(){openContractForm(c.id);}));
+    colAct.appendChild(sBtn('删除','Delete',function(){deleteContract(c.id);}));
+
+    [colName,colBrand,colParty,colType,colStatus,colStart,colEnd,colAct].forEach(function(col){row.appendChild(col);});
     resultCard.appendChild(row);
   });
   listEl.appendChild(resultCard);
