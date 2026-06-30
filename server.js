@@ -365,7 +365,17 @@ const SUPPORTED_MIME = [
   'application/msword','application/vnd.google-apps.document'
 ];
 
-function makeContractId() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+function makeContractId(dateStr, existingContracts) {
+  let d;
+  if (dateStr) {
+    d = dateStr.replace(/-/g, '');
+  } else {
+    const n = new Date();
+    d = String(n.getFullYear()) + String(n.getMonth()+1).padStart(2,'0') + String(n.getDate()).padStart(2,'0');
+  }
+  const count = (existingContracts || []).filter(c => c.id && c.id.startsWith(d)).length;
+  return d + String(count + 1).padStart(2, '0');
+}
 
 // Step 1: list new files only (fast, < 2s)
 async function listNewDriveFiles() {
@@ -497,7 +507,7 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
 
   // New contract record — field names match frontend expectations
   const record = {
-    id: makeContractId(),
+    id: makeContractId(x.startDate, contracts),
     name: x.name || fileName.replace(/\.[^.]+$/, ''),
     party: x.counterparty || '',          // frontend reads c.party
     entity: (resolved && resolved.entity) || x.ourEntity || '',
