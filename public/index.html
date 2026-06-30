@@ -331,6 +331,7 @@ textarea.form-input{resize:vertical;}
             <div class="ftab" data-filter="active">Active <span id="cnt-active"></span></div>
             <div class="ftab" data-filter="expiring">Expiring Soon <span id="cnt-expiring"></span></div>
             <div class="ftab" data-filter="expired">Expired <span id="cnt-expired"></span></div>
+            <div class="ftab" data-filter="unsigned" style="color:var(--orange)">⚠ No Signed Copy <span id="cnt-unsigned"></span></div>
           </div>
           <button class="btn btn-primary" style="margin-left:auto;font-size:12px" onclick="openContractForm(null)">＋ Add contract</button>
         </div>
@@ -1811,6 +1812,21 @@ function renderDashboard(){
 }
 
 // ── Contracts ───────────────────────────────────────────
+
+// Returns true if the contract has a confirmed signed copy
+function hasSignedVersion(c){
+  // Main file is signed
+  if(c.status==='active' && c.driveFileId) return true;
+  if(c.hasSigned===true) return true;
+  // Any version marked as final/signed
+  if(c.versions && c.versions.some(function(v){
+    return v.type==='final' || v.isSigned===true;
+  })) return true;
+  // Manually-created contracts with active status (no drive file)
+  if(c.status==='active' && !c.driveFileId) return true;
+  return false;
+}
+
 function getComputedStatus(c){
   var d=daysTo(c.end||c.endDate);
   if(d===null)return 'active';
@@ -1824,15 +1840,16 @@ function renderContracts(){
   var active=C.filter(function(c){var s=getComputedStatus(c);return s==='active'||s==='expiring';});
   var expiring=C.filter(function(c){return getComputedStatus(c)==='expiring';});
   var expired=C.filter(function(c){return getComputedStatus(c)==='expired';});
-  var counts={all:C.length,active:active.length,expiring:expiring.length,expired:expired.length};
-  ['all','active','expiring','expired'].forEach(function(k){
+  var unsigned=C.filter(function(c){return !hasSignedVersion(c);});
+  var counts={all:C.length,active:active.length,expiring:expiring.length,expired:expired.length,unsigned:unsigned.length};
+  ['all','active','expiring','expired','unsigned'].forEach(function(k){
     var e=q('cnt-'+k);if(e)e.textContent='('+counts[k]+')';
   });
   document.querySelectorAll('.ftab').forEach(function(t){
     t.classList.toggle('active',t.dataset.filter===curFilter);
   });
 
-  var base=curFilter==='all'?C:curFilter==='active'?active:curFilter==='expiring'?expiring:expired;
+  var base=curFilter==='all'?C:curFilter==='active'?active:curFilter==='expiring'?expiring:curFilter==='unsigned'?unsigned:expired;
 
   // Apply view filter first
   var filtered=base;
@@ -1903,6 +1920,12 @@ function renderContracts(){
     var nmSp=document.createElement('span');nmSp.textContent=c.name;nmSp.style.cssText='font-weight:600;color:var(--text);';
     var cidDiv=mk('div','cid',c.id);cidDiv.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;';
     c1.appendChild(fileIconSp);c1.appendChild(nmSp);c1.appendChild(cidDiv);
+    // "No signed copy" badge
+    if(!hasSignedVersion(c)){
+      var unsignedBadge=mk('span','','⚠ No signed copy');
+      unsignedBadge.style.cssText='font-size:10px;padding:1px 6px;border-radius:6px;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;margin-top:3px;display:inline-block;';
+      c1.appendChild(unsignedBadge);
+    }
     if(dupIds.indexOf(c.id)!==-1){
       var db=mk('span','','⚠ Duplicate');
       db.style.cssText='font-size:10px;padding:1px 6px;border-radius:6px;background:#fff3e0;color:#f57f17;border:1px solid #ffe082;margin-top:3px;display:inline-block;cursor:pointer;';
@@ -2267,7 +2290,18 @@ function openContractDetail(id){
   });
   // Status badge (computed)
   var sb=q('cd-status');
-  if(sb){sb.innerHTML='';var cs=getComputedStatus(c);var b=mk('span','badge '+(SB[cs]||'b-active'),SL[cs]||cs);sb.appendChild(b);}
+  if(sb){
+    sb.innerHTML='';
+    var cs=getComputedStatus(c);
+    var b=mk('span','badge '+(SB[cs]||'b-active'),SL[cs]||cs);
+    sb.appendChild(b);
+    // No signed copy warning
+    if(!hasSignedVersion(c)){
+      var ub=mk('span','','⚠ 无签署版');
+      ub.style.cssText='margin-left:6px;font-size:11px;padding:2px 8px;border-radius:10px;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;font-weight:600;';
+      sb.appendChild(ub);
+    }
+  }
   // Notes — always visible, inline-editable
   (function(cid,cNotes){
     var disp=q('cd-notes-display');

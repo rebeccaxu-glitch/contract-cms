@@ -303,9 +303,14 @@ async function extractWithClaude(fileBuffer, mimeType, fileName) {
     contentParts.push({ type: 'text', text: `Unable to read file. Filename: "${fileName}". Please extract what you can from the filename only.` });
   }
 
+  const fileHint = hasSignedKeyword(fileName)
+    ? 'Note: the filename suggests this may be a signed/executed copy.'
+    : '';
+
   contentParts.push({
     type: 'text',
     text: `Filename: "${fileName}"
+${fileHint}
 
 Analyse this contract and return ONLY a valid JSON object (no markdown, no explanation):
 {
@@ -322,7 +327,7 @@ Analyse this contract and return ONLY a valid JSON object (no markdown, no expla
   "currency": "SGD/USD/CNY/HKD/AUD or null",
   "autoRenew": true or false or null,
   "noticePeriod": number of days or null,
-  "isSigned": true if the contract has signatures or stamps indicating execution, false if draft,
+  "isSigned": true if the contract shows actual signatures (handwritten or digital), company chops/stamps, or execution markings from BOTH parties — false if it is a draft with no signatures,
   "summary": "2-3 sentence summary in the SAME LANGUAGE as the contract",
   "confidence": "high if clearly a contract with full details, medium if partial, low if unclear or not a contract"
 }`
@@ -391,6 +396,19 @@ async function listNewDriveFiles() {
   return { total: allFiles.length, newFiles, skipped };
 }
 
+// Detect signed contract from filename (double-check alongside Claude's content analysis)
+function hasSignedKeyword(fileName) {
+  return /signed|final|executed|countersigned|_sign[_\-\s]|签署[版稿]?|盖章|签字版|execution\s*copy/i.test(fileName || '');
+}
+
+// Fuzzy counterparty match (first 8 normalised chars overlap)
+function cpMatch(a, b) {
+  if (!a || !b) return false;
+  const na = a.toLowerCase().replace(/[\s.,()]/g,'').slice(0,8);
+  const nb = b.toLowerCase().replace(/[\s.,()]/g,'').slice(0,8);
+  return na.length >= 4 && nb.length >= 4 && (na.includes(nb.slice(0,6)) || nb.includes(na.slice(0,6)));
+}
+
 // Step 2: process one file (download + Claude + Firestore save, < 10s)
 async function processOneDriveFile(fileId, fileName, mimeType) {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('Missing ANTHROPIC_API_KEY');
@@ -407,6 +425,13 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
 
   const x = await extractWithClaude(buffer, mime, fileName);
 
+  // Combine Claude's content analysis with filename hint for better accuracy
+  const filenameSuggestsSigned = hasSignedKeyword(fileName);
+  // Treat as signed if: Claude says signed, OR filename strongly suggests signed
+  // Treat as draft if: Claude says draft AND filename has no signed keyword
+  const isSigned = x.isSigned !== false || filenameSuggestsSigned;
+  x.isSigned = isSigned; // normalise
+
   const contractsDoc = await db.collection('cms').doc('contracts').get();
   const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
 
@@ -416,16 +441,51 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
   );
   if (alreadyExists) return { skipped: true };
 
-  // Try to match to existing contract as a version (same counterparty)
-  if (x.isSigned === false && x.confidence !== 'low' && x.counterparty) {
-    const cp = x.counterparty.toLowerCase().replace(/\s+/g,'').slice(0,10);
-    const existing = contracts.find(c => {
-      const ecp = (c.counterparty||'').toLowerCase().replace(/\s+/g,'').slice(0,10);
-      return ecp && cp && (ecp.includes(cp.slice(0,6)) || cp.includes(ecp.slice(0,6)));
-    });
+  const counterpartyFromExtract = x.counterparty || '';
+
+  // ── Case A: NEW FILE IS SIGNED → check if an existing 'reviewing' contract matches ──
+  // If so, upgrade it: add signed file as final version, set status → active
+  if (isSigned && x.confidence !== 'low' && counterpartyFromExtract) {
+    const existing = contracts.find(c =>
+      c.status === 'reviewing' &&
+      cpMatch(c.party || c.counterparty, counterpartyFromExtract)
+    );
     if (existing) {
       if (!existing.versions) existing.versions = [];
-      existing.versions.push({ driveFileId: fileId, driveFileName: fileName, isSigned: false, scannedAt: new Date().toISOString() });
+      existing.versions.push({
+        id: 'v' + Date.now(),
+        type: 'final',
+        driveFileId: fileId,
+        driveFileName: fileName,
+        fileName: fileName,
+        isSigned: true,
+        scannedAt: new Date().toISOString(),
+        note: filenameSuggestsSigned ? '签署版（文件名识别）' : '签署版（AI 内容识别）'
+      });
+      existing.status = 'active';
+      existing.hasSigned = true;
+      await db.collection('cms').doc('contracts').set({ data: contracts });
+      return { action: 'upgraded', name: existing.name, contract: existing.name };
+    }
+  }
+
+  // ── Case B: NEW FILE IS DRAFT → add as draft version to matching existing contract ──
+  if (!isSigned && x.confidence !== 'low' && counterpartyFromExtract) {
+    const existing = contracts.find(c =>
+      cpMatch(c.party || c.counterparty, counterpartyFromExtract)
+    );
+    if (existing) {
+      if (!existing.versions) existing.versions = [];
+      existing.versions.push({
+        id: 'v' + Date.now(),
+        type: 'draft',
+        driveFileId: fileId,
+        driveFileName: fileName,
+        fileName: fileName,
+        isSigned: false,
+        scannedAt: new Date().toISOString(),
+        note: '草稿（Drive 导入）'
+      });
       await db.collection('cms').doc('contracts').set({ data: contracts });
       return { action: 'version_added', contract: existing.name };
     }
