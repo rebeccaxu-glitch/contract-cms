@@ -1376,7 +1376,9 @@ function renderBrandTree(){
         };})(bi,ei,flag);
 
         var nameLbl=mk('span','entity-name-txt',ent.name);
-        nameLbl.onclick=(function(bk,en){return function(e){e.stopPropagation();selectEntity(bk,en);};})(brand.key,ent.name);
+        // Whole row is clickable; flag/edit/delete stop propagation individually
+        eRow.style.cursor='pointer';
+        eRow.onclick=(function(bk,en){return function(e){selectEntity(bk,en);};})(brand.key,ent.name);
 
         var editE=mk('span','','✎');
         editE.style.cssText='font-size:10px;color:var(--text3);cursor:pointer;opacity:0;flex-shrink:0;padding:0 1px;transition:opacity .15s;';
