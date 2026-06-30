@@ -327,20 +327,21 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
     }
   }
 
-  // New contract record
+  // New contract record — field names match frontend expectations
   const record = {
     id: makeContractId(),
     name: x.name || fileName.replace(/\.[^.]+$/, ''),
-    counterparty: x.counterparty || '',
+    party: x.counterparty || '',          // frontend reads c.party
     entity: x.ourEntity || '',
-    type: x.type === 'intercompany' ? 'intercompany' : 'external',
-    contractType: x.contractType || '',
-    startDate: x.startDate || '',
-    endDate: x.endDate || '',
-    value: x.value || null,
+    isIntercompany: x.type === 'intercompany', // frontend uses isIntercompany flag
+    type: x.contractType || '',           // frontend shows c.type as contract type label
+    start: x.startDate || '',             // frontend reads c.start
+    end: x.endDate || '',                 // frontend reads c.end
+    fees: x.value ? String(x.value) : '', // frontend reads c.fees
     currency: x.currency || 'SGD',
-    autoRenew: x.autoRenew || false,
+    autoRenewal: x.autoRenew || false,    // frontend reads c.autoRenewal
     noticePeriod: x.noticePeriod || null,
+    noticePeriodUnit: 'days',
     status: x.isSigned === false ? 'reviewing' : 'active',
     notes: x.summary || '',
     driveFileId: fileId,
@@ -458,6 +459,49 @@ app.get('/api/drive/cron-scan', async (req, res) => {
     res.json({ ok: true, ...results, skipped });
   } catch(e) {
     console.error('Cron scan error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/drive/migrate-fields — one-time fix: remap Drive-imported contracts to correct field names
+app.get('/api/drive/migrate-fields', async (req, res) => {
+  try {
+    const doc = await db.collection('cms').doc('contracts').get();
+    if (!doc.exists) return res.json({ ok: true, migrated: 0, message: 'No contracts found' });
+    const contracts = doc.data().data || [];
+    let migrated = 0;
+    const updated = contracts.map(c => {
+      // Only migrate records that have the old field names (Drive-imported)
+      if (!c.driveFileId) return c; // skip manually-created contracts
+      const needsMigration = c.counterparty !== undefined || c.startDate !== undefined || c.endDate !== undefined;
+      if (!needsMigration) return c;
+      migrated++;
+      return {
+        ...c,
+        party: c.party || c.counterparty || '',
+        isIntercompany: c.isIntercompany !== undefined ? c.isIntercompany : (c.type === 'intercompany'),
+        type: c.type === 'intercompany' || c.type === 'external' ? (c.contractType || '') : (c.type || ''),
+        start: c.start || c.startDate || '',
+        end: c.end || c.endDate || '',
+        fees: c.fees || (c.value ? String(c.value) : ''),
+        autoRenewal: c.autoRenewal !== undefined ? c.autoRenewal : (c.autoRenew || false),
+        noticePeriodUnit: c.noticePeriodUnit || 'days',
+        // remove old fields
+        counterparty: undefined,
+        startDate: undefined,
+        endDate: undefined,
+        value: undefined,
+        autoRenew: undefined,
+        contractType: undefined,
+      };
+    }).map(c => {
+      // strip undefined keys
+      return Object.fromEntries(Object.entries(c).filter(([,v]) => v !== undefined));
+    });
+    await db.collection('cms').doc('contracts').set({ data: updated });
+    res.json({ ok: true, migrated, total: contracts.length });
+  } catch(e) {
+    console.error('Migration error:', e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });

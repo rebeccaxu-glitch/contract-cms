@@ -1770,7 +1770,7 @@ function renderDashboard(){
 
 // ── Contracts ───────────────────────────────────────────
 function getComputedStatus(c){
-  var d=daysTo(c.end);
+  var d=daysTo(c.end||c.endDate);
   if(d===null)return 'active';
   if(d<0)return 'expired';
   if(d<=60)return 'expiring';
@@ -1838,7 +1838,13 @@ function renderContracts(){
 
   // Helper: build a contract row element
   function buildContractRow(c){
-    var d=daysTo(c.end);
+    // Field compatibility: Drive-imported contracts may use old field names
+    var _party=c.party||c.counterparty||'';
+    var _start=c.start||c.startDate||'';
+    var _end=c.end||c.endDate||'';
+    var _fees=c.fees||c.amount||(c.value?String(c.value):'');
+    var _autoRenewal=c.autoRenewal||c.autoRenew||false;
+    var d=daysTo(_end);
     var isExpiring=d!==null&&d>=0&&d<=60;
     var isExpired=d!==null&&d<0;
     var hasFile=c.versions&&c.versions.some(function(v){return v.fileData||v.hasFile;});
@@ -1867,27 +1873,26 @@ function renderContracts(){
     if(c.entity){var entSpan=mk('span','',c.entity);entSpan.style.cssText='color:var(--text2);font-size:11px;';cEnt.appendChild(entSpan);}
     else{cEnt.textContent='—';cEnt.style.color='var(--border)';}
 
-    var c2=document.createElement('div');c2.textContent=c.party||'—';c2.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    var c2=document.createElement('div');c2.textContent=_party||'—';c2.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
     var c3=document.createElement('div');c3.style.cssText='display:flex;align-items:center;gap:3px;';
-    var typeSpan=mk('span','',c.type||'—');typeSpan.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
+    var typeSpan=mk('span','',(c.type||c.contractType||'—'));typeSpan.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
     var typeEdit=mk('span','inline-edit-btn','✎');
     typeEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'type',id);};})(c.id);
     c3.appendChild(typeSpan);c3.appendChild(typeEdit);
 
-    var c4=mk('div','',c.start||'—');c4.style.cssText='color:var(--text2);font-size:11px;';
+    var c4=mk('div','',_start||'—');c4.style.cssText='color:var(--text2);font-size:11px;';
 
-    var c5=mk('div','',c.end||'—');c5.style.cssText='font-size:11px;'+(isExpired?'color:var(--red);':(isExpiring?'color:var(--orange);font-weight:600;':'color:var(--text2);'));
+    var c5=mk('div','',_end||'—');c5.style.cssText='font-size:11px;'+(isExpired?'color:var(--red);':(isExpiring?'color:var(--orange);font-weight:600;':'color:var(--text2);'));
 
     var c6=document.createElement('div');c6.style.cssText='display:flex;align-items:center;gap:3px;';
-    var feesVal=c.fees||c.amount||'';
-    var feesTxt=c.currency&&feesVal?'<span style="font-size:9px;padding:1px 3px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);margin-right:2px;">'+c.currency+'</span>'+feesVal:(feesVal||'—');
+    var feesTxt=c.currency&&_fees?'<span style="font-size:9px;padding:1px 3px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);margin-right:2px;">'+c.currency+'</span>'+_fees:(_fees||'—');
     var feesSpan=document.createElement('span');feesSpan.innerHTML=feesTxt;feesSpan.style.cssText='flex:1;min-width:0;';
     var feesEdit=mk('span','inline-edit-btn','✎');
     feesEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'fees',id);};})(c.id);
     c6.appendChild(feesSpan);c6.appendChild(feesEdit);
 
-    var c7=document.createElement('div');c7.style.cssText='text-align:center;font-size:13px;color:'+(c.autoRenewal?'var(--accent)':'var(--text3)')+';';c7.textContent=c.autoRenewal?'✓':'✗';
+    var c7=document.createElement('div');c7.style.cssText='text-align:center;font-size:13px;color:'+(_autoRenewal?'var(--accent)':'var(--text3)')+';';c7.textContent=_autoRenewal?'✓':'✗';
 
     var c8=document.createElement('div');c8.style.cssText='display:flex;align-items:center;gap:3px;';
     var noticeVal=c.noticePeriod?(c.noticePeriod+' '+(c.noticePeriodUnit||'days')):'—';
@@ -4168,7 +4173,7 @@ function markDuplicatesInList(){
   var seen={};
   var dupIds=[];
   C.forEach(function(c){
-    var key = c.name.toLowerCase().replace(/\s/g,'').slice(0,10)+'_'+c.party.toLowerCase().replace(/\s/g,'').slice(0,6);
+    var key = (c.name||'').toLowerCase().replace(/\s/g,'').slice(0,10)+'_'+(c.party||c.counterparty||'').toLowerCase().replace(/\s/g,'').slice(0,6);
     if(seen[key]) dupIds.push(c.id, seen[key]);
     else seen[key]=c.id;
   });

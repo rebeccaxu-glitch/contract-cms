@@ -29,16 +29,20 @@
 <script>
 function openDB(){
   return new Promise(function(resolve,reject){
-    var req=indexedDB.open('cms_files',1);
-    req.onupgradeneeded=function(e){e.target.result.createObjectStore('files');};
+    var req=indexedDB.open('cms_files',2);
+    req.onupgradeneeded=function(e){
+      var db=e.target.result;
+      if(db.objectStoreNames.contains('files')) db.deleteObjectStore('files');
+      db.createObjectStore('files',{keyPath:'id'});
+    };
     req.onsuccess=function(e){resolve(e.target.result);};
     req.onerror=function(e){reject(e);};
   });
 }
-function idbSet(db,key,val){
+function idbSet(db,fileObj){
   return new Promise(function(resolve,reject){
     var tx=db.transaction('files','readwrite');
-    tx.objectStore('files').put(val,key);
+    tx.objectStore('files').put(fileObj);
     tx.oncomplete=function(){resolve();};
     tx.onerror=function(e){reject(e);};
   });
@@ -59,7 +63,7 @@ document.getElementById('fi').addEventListener('change',function(e){
     openDB().then(function(db){
       var tasks=files.map(function(f){
         if(!f.id||!f.dataUrl){log('⚠️ 跳过: '+(f.name||'?')+'（无数据）','err');return Promise.resolve();}
-        return idbSet(db,'file_'+f.id,f.dataUrl)
+        return idbSet(db,{id:f.id, name:f.name, type:f.type||'application/pdf', dataUrl:f.dataUrl})
           .then(function(){log('✅ '+f.name,'ok');})
           .catch(function(e){log('❌ '+f.name+': '+e,'err');});
       });
