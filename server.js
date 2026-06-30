@@ -170,6 +170,108 @@ app.post('/api/ai/analyze', express.json({ limit: '30mb' }), async (req, res) =>
 });
 
 // ══════════════════════════════════════════════════════════
+//  实体注册表 & Brand 解析
+// ══════════════════════════════════════════════════════════
+
+// All known entities across all brands.
+// coreWords: normalized keywords that uniquely identify this entity (order matters — more specific first)
+// jurisdictionAliases: required when multiple entities share the same name (e.g. Anzo Capital Limited BZ vs KE)
+// disambiguate: optional pipe-separated terms to pick between entities sharing the same coreWords
+const ENTITY_REGISTRY = [
+  // ── Orbitlabs ──────────────────────────────────────────
+  { brand:'orbitlabs', name:'Orbitlabs Pte. Ltd.',               flag:'🇸🇬', coreWords:['orbitlabs'] },
+  { brand:'orbitlabs', name:'深圳市星轨实验科技有限公司',            flag:'🇨🇳', coreWords:['星轨实验','星轨','xinggui'] },
+  { brand:'orbitlabs', name:'星應有限公司',                         flag:'🇹🇼', coreWords:['星應','xing ying','xingying'] },
+  { brand:'orbitlabs', name:'Orbitlabs Services Aust',            flag:'🇦🇺', coreWords:['orbitlabs'], disambiguate:'aust|australia' },
+
+  // ── Techntea ───────────────────────────────────────────
+  { brand:'techntea',  name:'Techntea Pte. Ltd.',                 flag:'🇸🇬', coreWords:['techntea'] },
+
+  // ── Anzo ──────────────────────────────────────────────
+  { brand:'anzo', name:'Anzo Holding Limited',                    flag:'🇭🇰', coreWords:['anzo holding'] },
+  { brand:'anzo', name:'Anzo Capital (Int.) Pty Ltd',             flag:'🇲🇺', coreWords:['anzo capital'], disambiguate:'int|mauritius|mu' },
+  { brand:'anzo', name:'Anzo Capital (Aust) Pty Ltd',             flag:'🇦🇺', coreWords:['anzo capital'], disambiguate:'aust|australia' },
+  { brand:'anzo', name:'Anzo Capital (SVG) LLC',                  flag:'🏳️',  coreWords:['anzo capital'], disambiguate:'svg|vincent|grenadines' },
+  { brand:'anzo', name:'ANZO CAPITAL GLOBAL LIMITED',             flag:'🇻🇺', coreWords:['anzo capital global','anzocapital global'] },
+  { brand:'anzo', name:'ANZOCAP NIGERIA LIMITED',                 flag:'🇳🇬', coreWords:['anzocap','anzo nigeria'] },
+  // Same name, different jurisdiction — require jurisdiction match
+  { brand:'anzo', name:'Anzo Capital Limited (BZ)',               flag:'🇧🇿', coreWords:['anzo capital limited'], jurisdictionAliases:['belize','bz','belizean'] },
+  { brand:'anzo', name:'Anzo Capital Limited (KE)',               flag:'🇰🇪', coreWords:['anzo capital limited'], jurisdictionAliases:['kenya','ke','kenyan','nairobi'] },
+
+  // ── DLSM ──────────────────────────────────────────────
+  { brand:'dlsm', name:'DLS Markets Limited',                     flag:'🇻🇺', coreWords:['dls markets'] },
+  { brand:'dlsm', name:'DLS Markets (International) Pty Ltd',     flag:'🇰🇾', coreWords:['dls markets'], disambiguate:'international|cayman|ky' },
+  { brand:'dlsm', name:'DLS Markets (Aust) Pty Ltd',              flag:'🇦🇺', coreWords:['dls markets'], disambiguate:'aust|australia' },
+  { brand:'dlsm', name:'Long Leading Services Sdn. Bhd.',         flag:'🇲🇾', coreWords:['long leading'], disambiguate:'sdn|bhd|malaysia|my' },
+  { brand:'dlsm', name:'LONG LEADING SERVICES PTY LTD',          flag:'🇦🇺', coreWords:['long leading'], disambiguate:'pty|aust|australia' },
+
+  // ── TTG ───────────────────────────────────────────────
+  { brand:'ttg', name:'ThreeTrader Global (MU) Pty Ltd',          flag:'🇲🇺', coreWords:['threetrader global','three trader global'], disambiguate:'mu|mauritius' },
+  { brand:'ttg', name:'ThreeTrader Global Limited',               flag:'🇻🇺', coreWords:['threetrader global','three trader global'] },
+  { brand:'ttg', name:'THREETRADER (V) LIMITED',                  flag:'🇻🇺', coreWords:['threetrader','three trader'], disambiguate:'vanuatu|vu' },
+  { brand:'ttg', name:'ThreeTrader Limited',                      flag:'🇻🇬', coreWords:['threetrader','three trader'] },
+  { brand:'ttg', name:'TTG HOLDING (SG) Pte. Ltd.',               flag:'🇸🇬', coreWords:['ttg holding','ttg'] },
+  { brand:'ttg', name:'TTG AU PTY LTD',                           flag:'🇦🇺', coreWords:['ttg'], disambiguate:'au|aust|australia' },
+  { brand:'ttg', name:'Lian Mei Global Company Limited',          flag:'🇹🇼', coreWords:['lian mei','联美','lianmei'] },
+
+  // ── Oqtima ────────────────────────────────────────────
+  { brand:'oqtima', name:'OQTIMA GLOBAL LIMITED',                 flag:'🇭🇰', coreWords:['oqtima global','oqtima'] },
+  { brand:'oqtima', name:'Oqtima Int. Ltd',                       flag:'🇸🇨', coreWords:['oqtima'] },
+  { brand:'oqtima', name:'Ipso Facto Ltd',                        flag:'🇨🇾', coreWords:['ipso facto'] },
+  { brand:'oqtima', name:'AD Maiora Holding Limited',             flag:'🇨🇾', coreWords:['ad maiora','admaiora'] },
+  { brand:'oqtima', name:'PLATICA SERVICES LIMITED',              flag:'🇨🇾', coreWords:['platica'] },
+
+  // ── Lime Up ───────────────────────────────────────────
+  { brand:'limeup', name:'Next Mango Pte. Ltd.',                  flag:'🇸🇬', coreWords:['next mango','nextmango'] },
+  { brand:'limeup', name:'Lime Up Services',                      flag:'🌐',  coreWords:['lime up','limeup'] },
+
+  // ── Paypaz ────────────────────────────────────────────
+  { brand:'paypaz', name:'Magic Papaya Pte. Ltd.',                flag:'🇸🇬', coreWords:['magic papaya','magicpapaya','paypaz'] },
+];
+
+// Normalize a string for matching: lowercase, strip punctuation/common suffixes, collapse spaces
+function normStr(s) {
+  return (s || '').toLowerCase()
+    .replace(/[.,()[\]_]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Resolve entity name + optional jurisdiction → { brand, entity } or null
+function resolveEntityInfo(entityName, jurisdiction) {
+  if (!entityName || !entityName.trim()) return null;
+  const ni = normStr(entityName);
+  const nj = normStr(jurisdiction || '');
+
+  let bestMatch = null, bestScore = 0;
+
+  for (const ent of ENTITY_REGISTRY) {
+    // 1. Check core word match (first match wins for same score)
+    const cw = ent.coreWords.find(w => ni.includes(normStr(w)));
+    if (!cw) continue;
+    let score = cw.length; // longer match = more specific
+
+    // 2. Jurisdiction is REQUIRED for entries with jurisdictionAliases
+    if (ent.jurisdictionAliases) {
+      const jurisHit = ent.jurisdictionAliases.some(a => ni.includes(a) || nj.includes(a));
+      if (!jurisHit) continue;
+      score += 20;
+    }
+
+    // 3. Disambiguation bonus (not required, just boosts score)
+    if (ent.disambiguate) {
+      const terms = ent.disambiguate.split('|');
+      if (terms.some(t => ni.includes(t) || nj.includes(t))) score += 10;
+    }
+
+    if (score > bestScore) { bestScore = score; bestMatch = ent; }
+  }
+
+  if (!bestMatch) return null;
+  return { brand: bestMatch.brand, entity: bestMatch.name };
+}
+
+// ══════════════════════════════════════════════════════════
 //  Google Drive 扫描
 // ══════════════════════════════════════════════════════════
 
@@ -208,14 +310,16 @@ async function extractWithClaude(fileBuffer, mimeType, fileName) {
 Analyse this contract and return ONLY a valid JSON object (no markdown, no explanation):
 {
   "name": "full contract title",
-  "counterparty": "counterparty company name",
-  "ourEntity": "our company entity name if mentioned, otherwise null",
+  "counterparty": "counterparty company full legal name exactly as written",
+  "counterpartyJurisdiction": "counterparty country/jurisdiction of incorporation (2-letter ISO code preferred, e.g. SG, CN, HK, AU, BZ, KE, VU, MU, CY, SC, BVI, MY, TW) or null",
+  "ourEntity": "our company entity full legal name exactly as written, or null",
+  "ourEntityJurisdiction": "our entity country/jurisdiction of incorporation (2-letter ISO code preferred) or null",
   "type": "external or intercompany",
-  "contractType": "e.g. Service Agreement, NDA, Employment Contract, Lease",
+  "contractType": "e.g. Service Agreement, NDA, Employment Contract, Lease, Loan Agreement",
   "startDate": "YYYY-MM-DD or null",
   "endDate": "YYYY-MM-DD or null",
   "value": number or null,
-  "currency": "SGD/USD/CNY/HKD or null",
+  "currency": "SGD/USD/CNY/HKD/AUD or null",
   "autoRenew": true or false or null,
   "noticePeriod": number of days or null,
   "isSigned": true if the contract has signatures or stamps indicating execution, false if draft,
@@ -327,19 +431,24 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
     }
   }
 
+  // Resolve brand + entity using registry
+  const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction)
+    || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction);
+
   // New contract record — field names match frontend expectations
   const record = {
     id: makeContractId(),
     name: x.name || fileName.replace(/\.[^.]+$/, ''),
     party: x.counterparty || '',          // frontend reads c.party
-    entity: x.ourEntity || '',
-    isIntercompany: x.type === 'intercompany', // frontend uses isIntercompany flag
+    entity: (resolved && resolved.entity) || x.ourEntity || '',
+    brand: (resolved && resolved.brand) || null,
+    isIntercompany: x.type === 'intercompany',
     type: x.contractType || '',           // frontend shows c.type as contract type label
-    start: x.startDate || '',             // frontend reads c.start
-    end: x.endDate || '',                 // frontend reads c.end
-    fees: x.value ? String(x.value) : '', // frontend reads c.fees
+    start: x.startDate || '',
+    end: x.endDate || '',
+    fees: x.value ? String(x.value) : '',
     currency: x.currency || 'SGD',
-    autoRenewal: x.autoRenew || false,    // frontend reads c.autoRenewal
+    autoRenewal: x.autoRenew || false,
     noticePeriod: x.noticePeriod || null,
     noticePeriodUnit: 'days',
     status: x.isSigned === false ? 'reviewing' : 'active',
@@ -348,6 +457,7 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
     driveFileName: fileName,
     driveScannedAt: new Date().toISOString(),
     aiConfidence: x.confidence || 'medium',
+    brandResolved: !!(resolved),
     versions: [],
     createdAt: new Date().toISOString()
   };
@@ -463,43 +573,112 @@ app.get('/api/drive/cron-scan', async (req, res) => {
   }
 });
 
-// GET /api/drive/migrate-fields — one-time fix: remap Drive-imported contracts to correct field names
+// GET /api/drive/file/:fileId — proxy Drive file to browser (preview or download)
+app.get('/api/drive/file/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const download = req.query.download === 'true';
+    const drive = getDriveClient();
+
+    // Get file metadata to know mimeType and name
+    const meta = await drive.files.get({ fileId, fields: 'id,name,mimeType', supportsAllDrives: true });
+    let { name, mimeType } = meta.data;
+
+    let buffer, servedMime;
+
+    if (mimeType === 'application/vnd.google-apps.document') {
+      // Google Doc → export as PDF
+      const r = await drive.files.export({ fileId, mimeType: 'application/pdf', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+      buffer = Buffer.from(r.data);
+      servedMime = 'application/pdf';
+      name = name.replace(/\.[^.]*$/, '') + '.pdf';
+    } else if (mimeType.includes('wordprocessingml') || mimeType.includes('msword')) {
+      if (download) {
+        // Download original DOCX
+        const r = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+        buffer = Buffer.from(r.data);
+        servedMime = mimeType;
+      } else {
+        // Preview: convert DOCX → HTML
+        const r = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+        const result = await mammoth.convertToHtml({ buffer: Buffer.from(r.data) });
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+          body{font-family:Georgia,serif;max-width:860px;margin:40px auto;padding:0 24px;line-height:1.7;color:#222;}
+          table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 10px;}
+        </style></head><body>${result.value}</body></html>`;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
+      }
+    } else {
+      // PDF or image — serve directly
+      const r = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+      buffer = Buffer.from(r.data);
+      servedMime = mimeType;
+    }
+
+    const disposition = download
+      ? `attachment; filename="${encodeURIComponent(name)}"`
+      : `inline; filename="${encodeURIComponent(name)}"`;
+
+    res.setHeader('Content-Type', servedMime);
+    res.setHeader('Content-Disposition', disposition);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch(e) {
+    console.error('Drive file proxy error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/drive/migrate-fields — fix field names AND re-run brand+entity classification on all contracts
 app.get('/api/drive/migrate-fields', async (req, res) => {
   try {
     const doc = await db.collection('cms').doc('contracts').get();
     if (!doc.exists) return res.json({ ok: true, migrated: 0, message: 'No contracts found' });
     const contracts = doc.data().data || [];
-    let migrated = 0;
+    let fieldFixed = 0, brandResolved = 0, brandUnresolved = 0;
+
     const updated = contracts.map(c => {
-      // Only migrate records that have the old field names (Drive-imported)
-      if (!c.driveFileId) return c; // skip manually-created contracts
-      const needsMigration = c.counterparty !== undefined || c.startDate !== undefined || c.endDate !== undefined;
-      if (!needsMigration) return c;
-      migrated++;
-      return {
+      // ── Step 1: fix old field names ──────────────────────
+      const needsFieldFix = c.counterparty !== undefined || c.startDate !== undefined || c.endDate !== undefined;
+      if (needsFieldFix) fieldFixed++;
+
+      const fixed = {
         ...c,
         party: c.party || c.counterparty || '',
         isIntercompany: c.isIntercompany !== undefined ? c.isIntercompany : (c.type === 'intercompany'),
-        type: c.type === 'intercompany' || c.type === 'external' ? (c.contractType || '') : (c.type || ''),
+        type: (c.type === 'intercompany' || c.type === 'external') ? (c.contractType || '') : (c.type || ''),
         start: c.start || c.startDate || '',
         end: c.end || c.endDate || '',
         fees: c.fees || (c.value ? String(c.value) : ''),
         autoRenewal: c.autoRenewal !== undefined ? c.autoRenewal : (c.autoRenew || false),
         noticePeriodUnit: c.noticePeriodUnit || 'days',
-        // remove old fields
-        counterparty: undefined,
-        startDate: undefined,
-        endDate: undefined,
-        value: undefined,
-        autoRenew: undefined,
-        contractType: undefined,
+        // remove deprecated fields
+        counterparty: undefined, startDate: undefined, endDate: undefined,
+        value: undefined, autoRenew: undefined, contractType: undefined,
       };
-    }).map(c => {
-      // strip undefined keys
-      return Object.fromEntries(Object.entries(c).filter(([,v]) => v !== undefined));
+
+      // ── Step 2: re-run brand+entity resolution ───────────
+      // Try ourEntity (from 'entity' field) first, then counterparty ('party')
+      const resolved = resolveEntityInfo(fixed.entity, null)
+        || resolveEntityInfo(fixed.party, null);
+
+      if (resolved) {
+        fixed.brand = resolved.brand;
+        fixed.entity = resolved.entity;
+        fixed.brandResolved = true;
+        brandResolved++;
+      } else {
+        fixed.brand = fixed.brand || null;
+        fixed.brandResolved = false;
+        brandUnresolved++;
+      }
+
+      return Object.fromEntries(Object.entries(fixed).filter(([,v]) => v !== undefined));
     });
+
     await db.collection('cms').doc('contracts').set({ data: updated });
-    res.json({ ok: true, migrated, total: contracts.length });
+    res.json({ ok: true, total: contracts.length, fieldFixed, brandResolved, brandUnresolved });
   } catch(e) {
     console.error('Migration error:', e);
     res.status(500).json({ ok: false, error: e.message });

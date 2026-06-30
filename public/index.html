@@ -224,6 +224,21 @@ textarea.form-input{resize:vertical;}
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 </head>
 <body>
+<!-- ── File Preview Modal ─────────────────────────── -->
+<div id="file-preview-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.72);flex-direction:column;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#1a1a2e;color:#fff;flex-shrink:0;">
+    <span id="fpm-title" style="font-size:14px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:12px;"></span>
+    <div style="display:flex;gap:8px;flex-shrink:0;">
+      <button id="fpm-download-btn" onclick="fpmDownload()" style="padding:5px 14px;border-radius:6px;border:none;background:#378add;color:#fff;font-size:12px;cursor:pointer;font-weight:600;">⬇ Download</button>
+      <button onclick="closeFpm()" style="padding:5px 14px;border-radius:6px;border:none;background:#444;color:#fff;font-size:12px;cursor:pointer;">✕ Close</button>
+    </div>
+  </div>
+  <div id="fpm-body" style="flex:1;overflow:hidden;background:#fff;">
+    <iframe id="fpm-iframe" style="width:100%;height:100%;border:none;display:none;"></iframe>
+    <div id="fpm-html" style="width:100%;height:100%;overflow:auto;display:none;"></div>
+    <div id="fpm-loading" style="display:flex;align-items:center;justify-content:center;height:100%;font-size:14px;color:#888;">Loading file…</div>
+  </div>
+</div>
 <!-- ── Login Screen ───────────────────────────────── -->
 <div id="login-screen">
   <div class="login-card">
@@ -991,7 +1006,7 @@ var BRANDS_DEFAULT = [
     {flag:'🇦🇺', name:'Orbitlabs Services Aust'}
   ]},
   {key:'techntea', name:'Techntea', color:'#378add', entities:[
-    {flag:'🇸🇬', name:'Techntea Pte.Ltd'}
+    {flag:'🇸🇬', name:'Techntea Pte. Ltd.'}
   ]},
   {key:'anzo', name:'Anzo', color:'#d85a30', entities:[
     {flag:'🇭🇰', name:'Anzo Holding Limited'},
@@ -1000,8 +1015,8 @@ var BRANDS_DEFAULT = [
     {flag:'🏳️', name:'Anzo Capital (SVG) LLC'},
     {flag:'🇻🇺', name:'ANZO CAPITAL GLOBAL LIMITED'},
     {flag:'🇳🇬', name:'ANZOCAP NIGERIA LIMITED'},
-    {flag:'🇧🇿', name:'ANZO CAPITAL LIMITED_BZ'},
-    {flag:'🇰🇪', name:'ANZO CAPITAL LIMITED_KE'}
+    {flag:'🇧🇿', name:'Anzo Capital Limited (BZ)'},
+    {flag:'🇰🇪', name:'Anzo Capital Limited (KE)'}
   ]},
   {key:'dlsm', name:'DLSM', color:'#7f77dd', entities:[
     {flag:'🇻🇺', name:'DLS Markets Limited'},
@@ -1027,7 +1042,7 @@ var BRANDS_DEFAULT = [
     {flag:'🇨🇾', name:'PLATICA SERVICES LIMITED'}
   ]},
   {key:'limeup', name:'Lime Up', color:'#639922', entities:[
-    {flag:'🇸🇬', name:'Next Mango Pte. Ltd'},
+    {flag:'🇸🇬', name:'Next Mango Pte. Ltd.'},
     {flag:'🌐', name:'Lime Up Services'}
   ]},
   {key:'paypaz', name:'Paypaz', color:'#534ab7', entities:[
@@ -1909,9 +1924,14 @@ function renderContracts(){
       else{var any=c.versions.filter(function(v){return v.fileData||v.hasFile;});if(any.length)latestFile=any[any.length-1];}
     }
     function actBtn(title,label,cb){var b=document.createElement('button');b.className='act-btn';b.title=title;b.textContent=label;b.onclick=function(e){e.stopPropagation();cb();};return b;}
-    if(latestFile){
-      c10.appendChild(actBtn('Download','⬇',(function(f){return function(){downloadContractFile(f);};})(latestFile)));
+    // Drive-imported contracts: use proxy endpoint for preview/download
+    var hasDriveFile = c.driveFileId;
+    if(hasDriveFile){
+      c10.appendChild(actBtn('Preview','👁',(function(fid,mime,fname){return function(){openFpm(fid,mime,fname);};})(c.driveFileId, 'application/pdf', c.driveFileName||c.name)));
+      c10.appendChild(actBtn('Download','⬇',(function(fid,fname){return function(){fpmDownload_direct(fid,fname);};})(c.driveFileId, c.driveFileName||c.name)));
+    } else if(latestFile){
       c10.appendChild(actBtn('Preview','👁',(function(f){return function(){previewContractFile(f);};})(latestFile)));
+      c10.appendChild(actBtn('Download','⬇',(function(f){return function(){downloadContractFile(f);};})(latestFile)));
     }
     c10.appendChild(actBtn('Edit','编辑',(function(id){return function(){openContractForm(id);};})(c.id)));
     c10.appendChild(actBtn('Delete','删除',(function(id){return function(){deleteContract(id);};})(c.id)));
@@ -3216,8 +3236,83 @@ function _triggerDownload(dataUrl, fileName){
   }
 }
 
+// ── Drive File Preview Modal ─────────────────────────────
+var _fpmFileId = null, _fpmMime = null, _fpmName = null;
+
+function openFpm(driveFileId, mimeType, fileName) {
+  _fpmFileId = driveFileId;
+  _fpmMime   = mimeType || 'application/pdf';
+  _fpmName   = fileName || 'contract';
+
+  var modal   = document.getElementById('file-preview-modal');
+  var iframe  = document.getElementById('fpm-iframe');
+  var htmlDiv = document.getElementById('fpm-html');
+  var loading = document.getElementById('fpm-loading');
+  document.getElementById('fpm-title').textContent = _fpmName;
+
+  iframe.style.display = 'none';
+  htmlDiv.style.display = 'none';
+  loading.style.display = 'flex';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  var isPdf = _fpmMime === 'application/pdf' || _fpmMime === 'application/vnd.google-apps.document';
+  var isDocx = _fpmMime && (_fpmMime.includes('wordprocessingml') || _fpmMime.includes('msword'));
+  var previewUrl = '/api/drive/file/' + driveFileId + '?mode=preview';
+
+  if (isPdf) {
+    iframe.src = previewUrl;
+    iframe.onload = function(){ loading.style.display='none'; iframe.style.display='block'; };
+    iframe.onerror = function(){ loading.textContent='无法预览此文件，请下载查看。'; };
+  } else if (isDocx) {
+    // DOCX → server returns HTML
+    fetch(previewUrl)
+      .then(function(r){ return r.text(); })
+      .then(function(html){
+        loading.style.display = 'none';
+        htmlDiv.innerHTML = html;
+        htmlDiv.style.display = 'block';
+      })
+      .catch(function(){ loading.textContent='无法预览此文件，请下载查看。'; });
+  } else {
+    // Fallback: open in new tab
+    loading.style.display = 'none';
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+    window.open(previewUrl, '_blank');
+  }
+}
+
+function closeFpm() {
+  var modal  = document.getElementById('file-preview-modal');
+  var iframe = document.getElementById('fpm-iframe');
+  modal.style.display = 'none';
+  iframe.src = '';
+  document.getElementById('fpm-html').innerHTML = '';
+  document.getElementById('fpm-loading').style.display = 'flex';
+  document.getElementById('fpm-loading').textContent = 'Loading file…';
+  document.body.style.overflow = '';
+  _fpmFileId = null;
+}
+
+function fpmDownload() {
+  if (!_fpmFileId) return;
+  var a = document.createElement('a');
+  a.href = '/api/drive/file/' + _fpmFileId + '?download=true';
+  a.download = _fpmName || 'contract';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// Close modal on backdrop click
+document.addEventListener('DOMContentLoaded', function(){
+  var modal = document.getElementById('file-preview-modal');
+  if (modal) modal.addEventListener('click', function(e){ if(e.target===modal) closeFpm(); });
+});
+
 function downloadContractFile(ver){
   if(!ver){alert('此版本没有上传文件');return;}
+  // Drive file — use proxy endpoint
+  if(ver.driveFileId){ fpmDownload_direct(ver.driveFileId, ver.driveFileName); return; }
   if(ver.storageUrl){ openFromStorage(ver.storageUrl, ver.fileType, ver.fileName); return; }
   if(!ver.fileData&&!ver.hasFile){alert('此版本没有上传文件');return;}
   if(ver.fileData){ _triggerDownload(ver.fileData, ver.fileName||'contract'); return; }
@@ -3225,6 +3320,13 @@ function downloadContractFile(ver){
     if(!f){alert('文件未找到，可能已被清除');return;}
     _triggerDownload(f.dataUrl, f.name||'contract');
   });
+}
+
+function fpmDownload_direct(driveFileId, fileName) {
+  var a = document.createElement('a');
+  a.href = '/api/drive/file/' + driveFileId + '?download=true';
+  a.download = fileName || 'contract';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 function previewContractFile(ver){
