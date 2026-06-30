@@ -2309,11 +2309,29 @@ function openContractDetail(id){
   openModal('modal-contract-detail');
 }
 function renderVersions(c){
-  var vs = (c.versions||[]).slice().sort(function(a,b){
+  var vs = (c.versions||[]).slice();
+  // If the contract itself was imported from Drive and has no version entry for its own file,
+  // synthesise a virtual version entry so the main file is always visible
+  if(c.driveFileId){
+    var alreadyHasMain = vs.some(function(v){ return v.driveFileId===c.driveFileId; });
+    if(!alreadyHasMain){
+      vs.unshift({
+        id: '_main_drive',
+        type: c.status==='reviewing' ? 'draft' : 'final',
+        driveFileId: c.driveFileId,
+        driveFileName: c.driveFileName || c.name,
+        fileName: c.driveFileName || c.name,
+        scannedAt: c.driveScannedAt || c.createdAt,
+        note: c.status==='reviewing' ? '草稿（Drive 导入）' : '签署版（Drive 导入）',
+        isSigned: c.status !== 'reviewing'
+      });
+    }
+  }
+  vs.sort(function(a,b){
     // Sort: final first, then by date desc
     if(a.type==='final' && b.type!=='final') return -1;
     if(a.type!=='final' && b.type==='final') return 1;
-    return (b.date||'') > (a.date||'') ? 1 : -1;
+    return (b.date||b.scannedAt||'') > (a.date||a.scannedAt||'') ? 1 : -1;
   });
 
   var fe = q('cd-final-ver');
@@ -2336,12 +2354,20 @@ function renderVersions(c){
   var TYPE_COLOR = {final:'var(--accent)', review:'var(--blue)', draft:'var(--yellow)'};
 
   vs.forEach(function(v){
-    var isFinal = v.type==='final';
+    // Normalise Drive-imported version fields
+    var vType  = v.type || (v.isSigned===false ? 'draft' : 'final');
+    var vName  = v.fileName || v.driveFileName || '';
+    var vDate  = v.date || (v.scannedAt ? v.scannedAt.slice(0,10) : '');
+    var vNote  = v.note || (v.driveFileId ? '📂 Drive 扫描导入' : '');
+    var hasDrive = !!v.driveFileId;
+    var hasLocal = !!(v.fileData || v.hasFile || v.storageUrl);
+
+    var isFinal = vType==='final';
     var row = mk('div');
     row.style.cssText = 'display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:9px;margin-bottom:8px;border:1.5px solid '+(isFinal?'var(--am)':'var(--border)')+';background:'+(isFinal?'var(--al)':'var(--surface2)');
 
     // Icon
-    var ic = mk('div','', TYPE_ICON[v.type]||'📋');
+    var ic = mk('div','', TYPE_ICON[vType]||'📋');
     ic.style.cssText='font-size:22px;flex-shrink:0;margin-top:2px';
 
     // Info
@@ -2349,34 +2375,39 @@ function renderVersions(c){
 
     // Top row: type label + version number
     var top = mk('div');top.style.cssText='display:flex;align-items:center;gap:7px;margin-bottom:4px;flex-wrap:wrap';
-    var typeLbl = mk('span','', TYPE_LABEL[v.type]||v.type);
-    typeLbl.style.cssText='font-size:11px;font-weight:700;color:'+(TYPE_COLOR[v.type]||'var(--text3)');
+    var typeLbl = mk('span','', TYPE_LABEL[vType]||(vType||'版本'));
+    typeLbl.style.cssText='font-size:11px;font-weight:700;color:'+(TYPE_COLOR[vType]||'var(--text3)');
     top.appendChild(typeLbl);
     if(v.ver){
       var verChip=mk('span','',v.ver);
       verChip.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;background:var(--border);color:var(--text2);font-family:"JetBrains Mono",monospace';
       top.appendChild(verChip);
     }
+    if(hasDrive){
+      var driveChip=mk('span','','📂 Drive');
+      driveChip.style.cssText='font-size:10px;padding:1px 7px;border-radius:8px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)';
+      top.appendChild(driveChip);
+    }
     info.appendChild(top);
 
     // Note / description
-    if(v.note){
-      var note=mk('div','',v.note);note.style.cssText='font-size:13px;font-weight:500;margin-bottom:3px';
+    if(vNote){
+      var note=mk('div','',vNote);note.style.cssText='font-size:12px;color:var(--text2);margin-bottom:3px';
       info.appendChild(note);
     }
 
-    // File name if uploaded
-    if(v.fileName){
+    // File name
+    if(vName){
       var fnRow=mk('div');fnRow.style.cssText='display:flex;align-items:center;gap:5px;margin-bottom:3px';
-      var fic=mk('span','',v.fileType&&v.fileType.includes('pdf')?'📄':'📝');fic.style.fontSize='11px';
-      var fnm=mk('span','',v.fileName);fnm.style.cssText='font-size:11px;color:var(--text2)';
+      var fic=mk('span','',(v.fileType||vName).includes('pdf')?'📄':'📝');fic.style.fontSize='11px';
+      var fnm=mk('span','',vName);fnm.style.cssText='font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
       fnRow.appendChild(fic);fnRow.appendChild(fnm);
       info.appendChild(fnRow);
     }
 
     // Date
-    if(v.date){
-      var dt=mk('div','',v.date);dt.style.cssText='font-size:11px;color:var(--text3);font-family:"JetBrains Mono",monospace';
+    if(vDate){
+      var dt=mk('div','',vDate);dt.style.cssText='font-size:11px;color:var(--text3);font-family:"JetBrains Mono",monospace';
       info.appendChild(dt);
     }
 
@@ -2385,17 +2416,27 @@ function renderVersions(c){
     // Action buttons
     var btns=mk('div');btns.style.cssText='display:flex;gap:6px;align-items:center;flex-shrink:0';
 
-    if(v.fileData||v.hasFile){
+    if(hasDrive){
+      var pvBtn=mk('button','btn btn-ghost','👁 预览');
+      pvBtn.style.cssText='font-size:11px;padding:4px 10px';
+      pvBtn.onclick=(function(fid,fname){return function(){openFpm(fid,'application/pdf',fname);};})(v.driveFileId, vName||'contract');
+      btns.appendChild(pvBtn);
+
       var dlBtn=mk('button','btn '+(isFinal?'btn-primary':'btn-ghost'),'⬇ 下载');
       dlBtn.style.cssText='font-size:11px;padding:4px 10px';
-      dlBtn.onclick=(function(ver){return function(){downloadContractFile(ver);};})(v);
+      dlBtn.onclick=(function(fid,fname){return function(){fpmDownload_direct(fid,fname);};})(v.driveFileId, vName||'contract');
       btns.appendChild(dlBtn);
+    } else if(hasLocal){
+      var dlBtn2=mk('button','btn '+(isFinal?'btn-primary':'btn-ghost'),'⬇ 下载');
+      dlBtn2.style.cssText='font-size:11px;padding:4px 10px';
+      dlBtn2.onclick=(function(ver){return function(){downloadContractFile(ver);};})(v);
+      btns.appendChild(dlBtn2);
 
       if(v.fileType&&v.fileType.includes('pdf')){
-        var pvBtn=mk('button','btn btn-ghost','👁 预览');
-        pvBtn.style.cssText='font-size:11px;padding:4px 10px';
-        pvBtn.onclick=(function(ver){return function(){previewContractFile(ver);};})(v);
-        btns.appendChild(pvBtn);
+        var pvBtn2=mk('button','btn btn-ghost','👁 预览');
+        pvBtn2.style.cssText='font-size:11px;padding:4px 10px';
+        pvBtn2.onclick=(function(ver){return function(){previewContractFile(ver);};})(v);
+        btns.appendChild(pvBtn2);
       }
     }
 
