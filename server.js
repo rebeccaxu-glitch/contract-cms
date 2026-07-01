@@ -583,21 +583,37 @@ app.get('/api/drive/debug', async (req, res) => {
   }
 });
 
-// GET /api/drive/list-all — list all files in Drive folder, marking which are already imported
+// GET /api/drive/list-all — recursively list files (2 levels deep), marking already imported
 app.get('/api/drive/list-all', async (req, res) => {
   try {
     const folderId = process.env.DRIVE_FOLDER_ID;
     if (!folderId) return res.status(500).json({ error: 'Missing DRIVE_FOLDER_ID' });
     const drive = getDriveClient();
 
-    const listRes = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id,name,mimeType,modifiedTime)',
-      pageSize: 200,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true
-    });
-    const allFiles = listRes.data.files || [];
+    // Recursively list files up to 2 folder levels deep
+    async function listFolder(id) {
+      const r = await drive.files.list({
+        q: `'${id}' in parents and trashed = false`,
+        fields: 'files(id,name,mimeType,modifiedTime)',
+        pageSize: 200,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
+      });
+      const items = r.data.files || [];
+      const files = [];
+      for (const item of items) {
+        if (item.mimeType === 'application/vnd.google-apps.folder') {
+          // One level deeper
+          const sub = await listFolder(item.id);
+          files.push(...sub);
+        } else {
+          files.push(item);
+        }
+      }
+      return files;
+    }
+
+    const allFiles = await listFolder(folderId);
 
     // Check which are already imported
     const contractsDoc = await db.collection('cms').doc('contracts').get();
@@ -619,7 +635,7 @@ app.get('/api/drive/list-all', async (req, res) => {
       }))
       .sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
 
-    res.json({ ok: true, files, total: allFiles.length });
+    res.json({ ok: true, files, total: files.length });
   } catch(e) {
     console.error('Drive list-all error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
