@@ -4129,19 +4129,57 @@ function _renderDiItems(items){
 
   folders.forEach(function(f){
     var row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;';
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);';
     row.onmouseover = function(){ this.style.background='var(--al)'; };
     row.onmouseout = function(){ this.style.background=''; };
-    row.onclick = function(){
+
+    // Checkbox to select entire folder
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = 'fcb_' + f.id;
+    cb.onchange = (function(fid, fname, checkbox){return function(){
+      var status = document.getElementById('fst_' + fid);
+      if(checkbox.checked){
+        if(status) status.textContent = '⏳';
+        fetch('/api/drive/browse?folderId=' + fid).then(function(r){return r.json();}).then(function(d){
+          var count = 0;
+          (d.items||[]).filter(function(x){return !x.isFolder;}).forEach(function(x){
+            _diSelectedFiles[x.id] = {id:x.id, name:x.name, mimeType:x.mimeType};
+            count++;
+          });
+          if(status) status.textContent = count + ' 个文件';
+          updateDiSelCount();
+        }).catch(function(){ checkbox.checked=false; if(status) status.textContent=''; });
+      } else {
+        // Deselect: need to unselect files from this folder
+        fetch('/api/drive/browse?folderId=' + fid).then(function(r){return r.json();}).then(function(d){
+          (d.items||[]).filter(function(x){return !x.isFolder;}).forEach(function(x){
+            delete _diSelectedFiles[x.id];
+          });
+          if(status) status.textContent='';
+          updateDiSelCount();
+        }).catch(function(){});
+      }
+    };})(f.id, f.name, cb);
+
+    var icon = document.createElement('span'); icon.textContent = '📁'; icon.style.cssText='font-size:15px;cursor:pointer;';
+    var name = document.createElement('span');
+    name.style.cssText = 'flex:1;font-size:13px;font-weight:500;color:var(--accent);cursor:pointer;';
+    name.textContent = f.name;
+    // Click name/icon to navigate in
+    var navIn = function(){
       _diBreadcrumb.push({ id: f.id, name: f.name });
       _diBrowse(f.id);
     };
-    var icon = document.createElement('span'); icon.textContent = '📁'; icon.style.fontSize='15px';
-    var name = document.createElement('span');
-    name.style.cssText = 'flex:1;font-size:13px;font-weight:500;color:var(--text);';
-    name.textContent = f.name;
-    var arr = document.createElement('span'); arr.textContent = '›'; arr.style.cssText='color:var(--text3);font-size:16px;';
-    row.appendChild(icon); row.appendChild(name); row.appendChild(arr);
+    icon.onclick = navIn; name.onclick = navIn;
+
+    var status = document.createElement('span');
+    status.id = 'fst_' + f.id;
+    status.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;';
+    var arr = document.createElement('span'); arr.textContent = '›'; arr.style.cssText='color:var(--text3);font-size:16px;cursor:pointer;';
+    arr.onclick = navIn;
+
+    row.appendChild(cb); row.appendChild(icon); row.appendChild(name); row.appendChild(status); row.appendChild(arr);
     list.appendChild(row);
   });
 
