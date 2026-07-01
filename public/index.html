@@ -2473,7 +2473,7 @@ function renderVersions(c){
       dlBtn2.onclick=(function(ver){return function(){downloadContractFile(ver);};})(v);
       btns.appendChild(dlBtn2);
 
-      if(v.fileType&&v.fileType.includes('pdf')){
+      if(v.fileType&&(v.fileType.includes('pdf')||v.fileType.includes('word')||v.fileType.includes('document')||(v.fileName&&v.fileName.match(/\.(pdf|docx|doc)$/i)))){
         var pvBtn2=mk('button','btn btn-ghost','👁 预览');
         pvBtn2.style.cssText='font-size:11px;padding:4px 10px';
         pvBtn2.onclick=(function(ver){return function(){previewContractFile(ver);};})(v);
@@ -2481,8 +2481,23 @@ function renderVersions(c){
       }
     }
 
+    // Delete button — inline confirm (avoids modal-blocked confirm dialog)
     var delBtn=mk('button','ver-del-btn','×');
-    delBtn.onclick=(function(vid){return function(){deleteVersion(vid);};})(v.id);
+    delBtn.title='删除版本';
+    (function(vid, btn){
+      var armed=false;
+      btn.onclick=function(e){
+        e.stopPropagation();
+        if(!armed){
+          armed=true;
+          btn.textContent='确定？';
+          btn.style.cssText='width:auto;padding:0 6px;height:24px;border-radius:5px;border:1px solid var(--red);background:var(--red);cursor:pointer;color:#fff;font-size:11px;font-weight:600;';
+          setTimeout(function(){if(armed){armed=false;btn.textContent='×';btn.style.cssText='';}},2500);
+        } else {
+          deleteVersion(vid);
+        }
+      };
+    })(v.id, delBtn);
     btns.appendChild(delBtn);
     row.appendChild(btns);
 
@@ -2492,12 +2507,11 @@ function renderVersions(c){
 
 
 function deleteVersion(vid){
-  if(!confirm('删除这个版本记录？'))return;
   var idx=C.findIndex(function(x){return x.id===curViewCid;});
   if(idx===-1)return;
   if(!C[idx].versions)return;
   C[idx].versions=C[idx].versions.filter(function(v){return v.id!==vid;});
-  save(SK.C,C);renderVersions(C[idx]);
+  save(SK.C,C);fbSaveAll();renderVersions(C[idx]);
 }
 
 // ── Upload / AI ─────────────────────────────────────────
@@ -4052,6 +4066,31 @@ var driveFiles = [];      // files fetched from Drive
 var driveResults = [];    // AI-recognized results
 var diScanning = false;
 
+function runMigrateIds(){
+  var btn=q('di-migrate-btn'),res=q('di-migrate-result');
+  btn.disabled=true;btn.textContent='Migrating...';
+  res.style.display='none';
+  fetch('/api/migrate-ids').then(function(r){return r.json();}).then(function(d){
+    if(d.ok){
+      res.style.display='block';
+      res.style.color='var(--green)';
+      res.textContent='✅ 完成！共更新 '+d.migrated+' 份合同 ID。';
+      // Reload from Firestore to reflect new IDs
+      return fbLoadAll().then(function(){
+        renderDashboard();renderContracts();updateNavCounts();
+      });
+    } else {
+      throw new Error(d.error||'Unknown error');
+    }
+  }).catch(function(e){
+    res.style.display='block';
+    res.style.color='var(--red)';
+    res.textContent='❌ 失败：'+e.message;
+  }).finally(function(){
+    btn.disabled=false;btn.textContent='🔢 Migrate IDs';
+  });
+}
+
 function openDriveImport(){
   openModal('modal-drive-import');
   // Load last scan status
@@ -5027,10 +5066,15 @@ function startApp(){
       The scanner will automatically:<br>
       • Detect new files not yet in the system<br>
       • Extract contract details using AI<br>
-      • Add signed contracts as <strong>Active</strong>, drafts as <strong>Reviewing</strong><br>
-      • Run automatically every day at 9am SGT
+      • Add signed contracts as <strong>Active</strong>, drafts as <strong>Reviewing</strong>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+    <!-- Migrate IDs -->
+    <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:12px;color:var(--text3);">重置所有合同 ID 为日期格式（YYYYMMDDNN）</div>
+      <button class="btn btn-ghost" id="di-migrate-btn" onclick="runMigrateIds()" style="font-size:12px;">🔢 Migrate IDs</button>
+    </div>
+    <div id="di-migrate-result" style="font-size:12px;color:var(--text3);margin-top:6px;display:none;"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px;">
       <button class="btn btn-ghost" onclick="closeModal('modal-drive-import')">Close</button>
     </div>
   </div>
