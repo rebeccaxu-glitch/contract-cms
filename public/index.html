@@ -4091,20 +4091,17 @@ function browseAndScan(){
 function renderDiFileList(files){
   var list = q('di-file-list');
   list.innerHTML = '';
-  // Only show supported files (PDF, DOCX, Google Docs)
-  var showable = files.filter(function(f){ return f.supported !== false; });
-  if(!showable.length){
-    list.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3);">No supported files found (PDF / DOCX / Google Docs)</div>';
+  if(!files.length){
+    list.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3);">No files found in Drive folder</div>';
     return;
   }
-  showable.forEach(function(f){
+  files.forEach(function(f){
     var row = document.createElement('label');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;' + (f.imported ? 'opacity:0.45;' : '');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;' + (f.imported ? 'opacity:0.5;' : '');
     var cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = f.id;
     cb.dataset.name = f.name; cb.dataset.mime = f.mimeType;
     cb.checked = !f.imported;
-    cb.disabled = false;
     cb.onchange = updateDiSelCount;
     var date = f.modifiedTime ? f.modifiedTime.slice(0,10) : '';
     var ext = f.name.match(/\.(\w+)$/);
@@ -4123,9 +4120,7 @@ function renderDiFileList(files){
 
 function filterDiFiles(){
   var q2 = (q('di-filter').value || '').toLowerCase();
-  var filtered = _diAllFiles.filter(function(f){
-    return f.supported !== false && (!q2 || f.name.toLowerCase().includes(q2));
-  });
+  var filtered = q2 ? _diAllFiles.filter(function(f){ return f.name.toLowerCase().includes(q2); }) : _diAllFiles;
   renderDiFileList(filtered);
 }
 
