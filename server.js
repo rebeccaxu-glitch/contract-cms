@@ -583,39 +583,25 @@ app.get('/api/drive/debug', async (req, res) => {
   }
 });
 
-// GET /api/drive/list-all — recursively list files (2 levels deep), marking already imported
-app.get('/api/drive/list-all', async (req, res) => {
+// GET /api/drive/browse?folderId=xxx — list one folder level (folders + files)
+app.get('/api/drive/browse', async (req, res) => {
   try {
-    const folderId = process.env.DRIVE_FOLDER_ID;
-    if (!folderId) return res.status(500).json({ error: 'Missing DRIVE_FOLDER_ID' });
+    const rootId = process.env.DRIVE_FOLDER_ID;
+    if (!rootId) return res.status(500).json({ error: 'Missing DRIVE_FOLDER_ID' });
+    const targetId = req.query.folderId || rootId;
     const drive = getDriveClient();
 
-    // Recursively list files up to 2 folder levels deep
-    async function listFolder(id) {
-      const r = await drive.files.list({
-        q: `'${id}' in parents and trashed = false`,
-        fields: 'files(id,name,mimeType,modifiedTime)',
-        pageSize: 200,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true
-      });
-      const items = r.data.files || [];
-      const files = [];
-      for (const item of items) {
-        if (item.mimeType === 'application/vnd.google-apps.folder') {
-          // One level deeper
-          const sub = await listFolder(item.id);
-          files.push(...sub);
-        } else {
-          files.push(item);
-        }
-      }
-      return files;
-    }
+    const r = await drive.files.list({
+      q: `'${targetId}' in parents and trashed = false`,
+      fields: 'files(id,name,mimeType,modifiedTime)',
+      pageSize: 200,
+      orderBy: 'name',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+    const items = r.data.files || [];
 
-    const allFiles = await listFolder(folderId);
-
-    // Check which are already imported
+    // Check which files are already imported
     const contractsDoc = await db.collection('cms').doc('contracts').get();
     const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
     const knownIds = new Set();
@@ -624,20 +610,19 @@ app.get('/api/drive/list-all', async (req, res) => {
       (c.versions || []).forEach(v => { if (v.driveFileId) knownIds.add(v.driveFileId); });
     });
 
-    const files = allFiles
-      .map(f => ({
-        id: f.id,
-        name: f.name,
-        mimeType: f.mimeType,
-        modifiedTime: f.modifiedTime,
-        imported: knownIds.has(f.id),
-        supported: SUPPORTED_MIME.includes(f.mimeType)
-      }))
-      .sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
+    const result = items.map(f => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType,
+      modifiedTime: f.modifiedTime ? f.modifiedTime.slice(0, 10) : '',
+      isFolder: f.mimeType === 'application/vnd.google-apps.folder',
+      imported: knownIds.has(f.id),
+      supported: SUPPORTED_MIME.includes(f.mimeType)
+    }));
 
-    res.json({ ok: true, files, total: files.length });
+    res.json({ ok: true, items: result, folderId: targetId, isRoot: targetId === rootId });
   } catch(e) {
-    console.error('Drive list-all error:', e.message);
+    console.error('Drive browse error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });

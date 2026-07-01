@@ -4066,82 +4066,129 @@ var driveFiles = [];      // files fetched from Drive
 var driveResults = [];    // AI-recognized results
 var diScanning = false;
 
-// ── Drive file picker ──────────────────────────────────
-var _diAllFiles = []; // all files from Drive
+// ── Drive folder browser ───────────────────────────────
+var _diBreadcrumb = []; // [{id, name}]
+var _diSelectedFiles = {}; // fileId → {id, name, mimeType}
 
 function browseAndScan(){
-  var btn = q('di-scan-btn');
-  btn.disabled = true; btn.textContent = '⏳ Loading...';
+  _diBreadcrumb = [{ id: null, name: 'Contracts for AI training' }];
+  _diSelectedFiles = {};
   q('di-empty').style.display = 'none';
-  q('di-file-picker').style.display = 'none';
   q('di-result').style.display = 'none';
-  fetch('/api/drive/list-all').then(function(r){ return r.json(); }).then(function(d){
-    btn.disabled = false; btn.textContent = '📂 Browse Files';
-    if(!d.ok){ alert('Failed: ' + (d.error||'unknown')); q('di-empty').style.display='block'; return; }
-    _diAllFiles = d.files || [];
-    renderDiFileList(_diAllFiles);
-    q('di-file-picker').style.display = 'block';
+  q('di-file-picker').style.display = 'block';
+  _diBrowse(null);
+}
+
+function _diBrowse(folderId){
+  var list = q('di-file-list');
+  list.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3);">⏳ Loading...</div>';
+  _renderDiBreadcrumb();
+  var url = '/api/drive/browse' + (folderId ? '?folderId=' + folderId : '');
+  fetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if(!d.ok){ list.innerHTML = '<div style="padding:16px;color:var(--red);font-size:12px;">Error: '+(d.error||'unknown')+'</div>'; return; }
+    _renderDiItems(d.items || []);
+    updateDiSelCount();
   }).catch(function(e){
-    btn.disabled = false; btn.textContent = '📂 Browse Files';
-    alert('Error: ' + e.message);
-    q('di-empty').style.display = 'block';
+    list.innerHTML = '<div style="padding:16px;color:var(--red);font-size:12px;">Error: '+e.message+'</div>';
   });
 }
 
-function renderDiFileList(files){
+function _renderDiBreadcrumb(){
+  var bc = q('di-breadcrumb');
+  if(!bc) return;
+  bc.innerHTML = '';
+  _diBreadcrumb.forEach(function(crumb, i){
+    var span = document.createElement('span');
+    span.style.cssText = 'font-size:12px;cursor:pointer;color:' + (i===_diBreadcrumb.length-1?'var(--text)':'var(--accent)') + ';';
+    span.textContent = crumb.name;
+    if(i < _diBreadcrumb.length-1){
+      span.onclick = (function(idx, id){ return function(){
+        _diBreadcrumb = _diBreadcrumb.slice(0, idx+1);
+        _diBrowse(id);
+      }; })(i, crumb.id);
+    }
+    bc.appendChild(span);
+    if(i < _diBreadcrumb.length-1){
+      var sep = document.createElement('span');
+      sep.textContent = ' › '; sep.style.cssText = 'font-size:12px;color:var(--text3);margin:0 2px;';
+      bc.appendChild(sep);
+    }
+  });
+}
+
+function _renderDiItems(items){
   var list = q('di-file-list');
   list.innerHTML = '';
-  if(!files.length){
-    list.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3);">No files found in Drive folder</div>';
+  if(!items.length){
+    list.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3);">Empty folder</div>';
     return;
   }
+  // Folders first, then files
+  var folders = items.filter(function(f){ return f.isFolder; });
+  var files = items.filter(function(f){ return !f.isFolder; });
+
+  folders.forEach(function(f){
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;';
+    row.onmouseover = function(){ this.style.background='var(--al)'; };
+    row.onmouseout = function(){ this.style.background=''; };
+    row.onclick = function(){
+      _diBreadcrumb.push({ id: f.id, name: f.name });
+      _diBrowse(f.id);
+    };
+    var icon = document.createElement('span'); icon.textContent = '📁'; icon.style.fontSize='15px';
+    var name = document.createElement('span');
+    name.style.cssText = 'flex:1;font-size:13px;font-weight:500;color:var(--text);';
+    name.textContent = f.name;
+    var arr = document.createElement('span'); arr.textContent = '›'; arr.style.cssText='color:var(--text3);font-size:16px;';
+    row.appendChild(icon); row.appendChild(name); row.appendChild(arr);
+    list.appendChild(row);
+  });
+
   files.forEach(function(f){
     var row = document.createElement('label');
     row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;' + (f.imported ? 'opacity:0.5;' : '');
     var cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = f.id;
-    cb.dataset.name = f.name; cb.dataset.mime = f.mimeType;
-    cb.checked = !f.imported;
-    cb.onchange = updateDiSelCount;
-    var date = f.modifiedTime ? f.modifiedTime.slice(0,10) : '';
-    var ext = f.name.match(/\.(\w+)$/);
-    var icon = ext && ext[1].toLowerCase()==='pdf' ? '📄' : '📝';
-    var nameEl = document.createElement('span');
-    nameEl.style.cssText = 'flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    nameEl.textContent = icon + ' ' + f.name;
+    cb.checked = !!_diSelectedFiles[f.id] || (!f.imported && f.supported);
+    if(cb.checked && !f.imported) _diSelectedFiles[f.id] = { id:f.id, name:f.name, mimeType:f.mimeType };
+    cb.onchange = function(){
+      if(this.checked) _diSelectedFiles[f.id] = { id:f.id, name:f.name, mimeType:f.mimeType };
+      else delete _diSelectedFiles[f.id];
+      updateDiSelCount();
+    };
+    var ext = (f.name.match(/\.(\w+)$/) || [])[1] || '';
+    var icon = document.createElement('span');
+    icon.textContent = ext.toLowerCase()==='pdf' ? '📄' : '📝';
+    icon.style.fontSize='14px';
+    var name = document.createElement('span');
+    name.style.cssText = 'flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    name.textContent = f.name;
     var meta = document.createElement('span');
-    meta.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;';
-    meta.textContent = (f.imported ? '✓ 已导入 ' : '') + date;
-    row.appendChild(cb); row.appendChild(nameEl); row.appendChild(meta);
+    meta.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;white-space:nowrap;';
+    meta.textContent = (f.imported ? '✓ ' : '') + f.modifiedTime;
+    row.appendChild(cb); row.appendChild(icon); row.appendChild(name); row.appendChild(meta);
     list.appendChild(row);
   });
-  updateDiSelCount();
-}
-
-function filterDiFiles(){
-  var q2 = (q('di-filter').value || '').toLowerCase();
-  var filtered = q2 ? _diAllFiles.filter(function(f){ return f.name.toLowerCase().includes(q2); }) : _diAllFiles;
-  renderDiFileList(filtered);
 }
 
 function diSelectAll(v){
-  q('di-file-list').querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=v; });
-  updateDiSelCount();
+  q('di-file-list').querySelectorAll('input[type=checkbox]').forEach(function(cb){
+    cb.checked = v;
+    cb.onchange && cb.onchange.call(cb);
+  });
 }
 
 function updateDiSelCount(){
-  var checked = q('di-file-list').querySelectorAll('input[type=checkbox]:checked').length;
-  q('di-sel-count').textContent = '已选 ' + checked + ' 个文件';
-  q('di-import-btn').disabled = checked === 0;
+  var n = Object.keys(_diSelectedFiles).length;
+  q('di-sel-count').textContent = '已选 ' + n + ' 个文件';
+  q('di-import-btn').disabled = n === 0;
 }
 
 function importSelected(){
-  var checked = Array.from(q('di-file-list').querySelectorAll('input[type=checkbox]:checked'));
-  if(!checked.length){ alert('请先选择文件'); return; }
-  var files = checked.map(function(cb){ return { id: cb.value, name: cb.dataset.name, mimeType: cb.dataset.mime }; });
+  var files = Object.values(_diSelectedFiles);
+  if(!files.length){ alert('请先选择文件'); return; }
   q('di-file-picker').style.display = 'none';
-  q('di-import-btn').disabled = true;
-  // Reuse existing scan progress UI
   _runDriveScanWithFiles(files);
 }
 
@@ -5177,9 +5224,8 @@ function startApp(){
     <!-- File picker list -->
     <div id="di-file-picker" style="display:none;margin-bottom:16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div style="font-size:12px;font-weight:600;color:var(--text2);">选择要导入的文件</div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <input id="di-filter" type="text" placeholder="筛选文件名…" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:140px;" oninput="filterDiFiles()">
+        <div id="di-breadcrumb" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:8px;">
           <button class="btn btn-ghost" onclick="diSelectAll(true)" style="font-size:11px;padding:3px 8px;">全选</button>
           <button class="btn btn-ghost" onclick="diSelectAll(false)" style="font-size:11px;padding:3px 8px;">全不选</button>
         </div>
