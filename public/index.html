@@ -4096,12 +4096,14 @@ function renderDiFileList(files){
     return;
   }
   files.forEach(function(f){
+    var unsupported = f.supported === false;
     var row = document.createElement('label');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;' + (f.imported ? 'opacity:0.5;' : '');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;' + (f.imported || unsupported ? 'opacity:0.45;' : '');
     var cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = f.id;
     cb.dataset.name = f.name; cb.dataset.mime = f.mimeType;
-    cb.checked = !f.imported; // pre-check new files only
+    cb.checked = !f.imported && !unsupported; // pre-check new supported files only
+    cb.disabled = unsupported;
     cb.onchange = updateDiSelCount;
     var date = f.modifiedTime ? f.modifiedTime.slice(0,10) : '';
     var ext = f.name.match(/\.(\w+)$/);

@@ -609,17 +609,17 @@ app.get('/api/drive/list-all', async (req, res) => {
     });
 
     const files = allFiles
-      .filter(f => SUPPORTED_MIME.includes(f.mimeType))
       .map(f => ({
         id: f.id,
         name: f.name,
         mimeType: f.mimeType,
         modifiedTime: f.modifiedTime,
-        imported: knownIds.has(f.id)
+        imported: knownIds.has(f.id),
+        supported: SUPPORTED_MIME.includes(f.mimeType)
       }))
       .sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
 
-    res.json({ ok: true, files });
+    res.json({ ok: true, files, total: allFiles.length });
   } catch(e) {
     console.error('Drive list-all error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
