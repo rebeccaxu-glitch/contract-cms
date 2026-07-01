@@ -4066,6 +4066,128 @@ var driveFiles = [];      // files fetched from Drive
 var driveResults = [];    // AI-recognized results
 var diScanning = false;
 
+// ── Drive file picker ──────────────────────────────────
+var _diAllFiles = []; // all files from Drive
+
+function browseAndScan(){
+  var btn = q('di-scan-btn');
+  btn.disabled = true; btn.textContent = '⏳ Loading...';
+  q('di-empty').style.display = 'none';
+  q('di-file-picker').style.display = 'none';
+  q('di-result').style.display = 'none';
+  fetch('/api/drive/list-all').then(function(r){ return r.json(); }).then(function(d){
+    btn.disabled = false; btn.textContent = '📂 Browse Files';
+    if(!d.ok){ alert('Failed: ' + (d.error||'unknown')); q('di-empty').style.display='block'; return; }
+    _diAllFiles = d.files || [];
+    renderDiFileList(_diAllFiles);
+    q('di-file-picker').style.display = 'block';
+  }).catch(function(e){
+    btn.disabled = false; btn.textContent = '📂 Browse Files';
+    alert('Error: ' + e.message);
+    q('di-empty').style.display = 'block';
+  });
+}
+
+function renderDiFileList(files){
+  var list = q('di-file-list');
+  list.innerHTML = '';
+  if(!files.length){
+    list.innerHTML = '<div style="padding:16px;text-align:center;font-size:12px;color:var(--text3);">No files found</div>';
+    return;
+  }
+  files.forEach(function(f){
+    var row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;' + (f.imported ? 'opacity:0.5;' : '');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = f.id;
+    cb.dataset.name = f.name; cb.dataset.mime = f.mimeType;
+    cb.checked = !f.imported; // pre-check new files only
+    cb.onchange = updateDiSelCount;
+    var date = f.modifiedTime ? f.modifiedTime.slice(0,10) : '';
+    var ext = f.name.match(/\.(\w+)$/);
+    var icon = ext && ext[1].toLowerCase()==='pdf' ? '📄' : '📝';
+    var nameEl = document.createElement('span');
+    nameEl.style.cssText = 'flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameEl.textContent = icon + ' ' + f.name;
+    var meta = document.createElement('span');
+    meta.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;';
+    meta.textContent = (f.imported ? '✓ 已导入 ' : '') + date;
+    row.appendChild(cb); row.appendChild(nameEl); row.appendChild(meta);
+    list.appendChild(row);
+  });
+  updateDiSelCount();
+}
+
+function filterDiFiles(){
+  var q2 = (q('di-filter').value || '').toLowerCase();
+  var filtered = q2 ? _diAllFiles.filter(function(f){ return f.name.toLowerCase().includes(q2); }) : _diAllFiles;
+  renderDiFileList(filtered);
+}
+
+function diSelectAll(v){
+  q('di-file-list').querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked=v; });
+  updateDiSelCount();
+}
+
+function updateDiSelCount(){
+  var checked = q('di-file-list').querySelectorAll('input[type=checkbox]:checked').length;
+  q('di-sel-count').textContent = '已选 ' + checked + ' 个文件';
+  q('di-import-btn').disabled = checked === 0;
+}
+
+function importSelected(){
+  var checked = Array.from(q('di-file-list').querySelectorAll('input[type=checkbox]:checked'));
+  if(!checked.length){ alert('请先选择文件'); return; }
+  var files = checked.map(function(cb){ return { id: cb.value, name: cb.dataset.name, mimeType: cb.dataset.mime }; });
+  q('di-file-picker').style.display = 'none';
+  q('di-import-btn').disabled = true;
+  // Reuse existing scan progress UI
+  _runDriveScanWithFiles(files);
+}
+
+function _runDriveScanWithFiles(files){
+  if(diScanning) return;
+  diScanning = true;
+  var prog = q('di-progress'), bar = q('di-bar'), txt = q('di-prog-text'), res = q('di-result');
+  prog.style.display = 'block'; bar.style.width = '0%'; res.style.display = 'none';
+  var total = files.length, done = 0, added = 0, reviewing = 0, errors = 0, skipped = 0;
+  txt.textContent = '正在处理 0 / ' + total + '…';
+
+  function processNext(i){
+    if(i >= files.length){
+      diScanning = false;
+      prog.style.display = 'none';
+      var a=added, rv=reviewing, e=errors, sk=skipped;
+      res.style.display = 'block';
+      res.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">✅ 完成！</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--accent);">'+a+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Added</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--yellow);">'+rv+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Reviewing</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text3);">'+sk+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Skipped</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+e+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
+        +'</div>';
+      if(a + rv > 0){
+        fbLoadAll().then(function(){ renderDashboard(); renderContracts(); updateNavCounts(); }).catch(function(){});
+      }
+      return;
+    }
+    var f = files[i];
+    txt.textContent = '正在处理 ' + (i+1) + ' / ' + total + '：' + f.name;
+    bar.style.width = Math.round((i/total)*100) + '%';
+    fetch('/api/drive/process', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fileId:f.id, fileName:f.name, mimeType:f.mimeType }) })
+      .then(function(r){ return r.json(); }).then(function(r){
+        if(r.skipped) skipped++;
+        else if(r.action==='added'){ if(r.status==='active') added++; else reviewing++; }
+        else if(r.action==='upgraded') added++;
+        else if(r.action==='version_added') reviewing++;
+        else if(!r.ok) errors++;
+        done++;
+        processNext(i+1);
+      }).catch(function(){ errors++; done++; processNext(i+1); });
+  }
+  processNext(0);
+}
+
 function runMigrateIds(){
   var btn=q('di-migrate-btn'),res=q('di-migrate-result');
   btn.disabled=true;btn.textContent='Migrating...';
@@ -5042,7 +5164,7 @@ function startApp(){
       <div class="modal-title">📂 Drive Import</div>
       <button class="modal-close" onclick="closeModal('modal-drive-import')">×</button>
     </div>
-    <!-- Folder info -->
+    <!-- Folder info + Browse -->
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px;">
       <span style="font-size:22px;">📁</span>
       <div style="flex:1;min-width:0;">
@@ -5050,7 +5172,23 @@ function startApp(){
         <div style="font-size:11px;color:var(--text3);margin-top:2px;" id="di-last-scan">Checking last scan...</div>
         <div style="font-size:11px;color:var(--text2);margin-top:1px;" id="di-last-summary"></div>
       </div>
-      <button class="btn btn-primary" onclick="startDriveScan()" id="di-scan-btn" style="font-size:12px;padding:7px 14px;flex-shrink:0;">🔄 Scan Drive</button>
+      <button class="btn btn-primary" onclick="browseAndScan()" id="di-scan-btn" style="font-size:12px;padding:7px 14px;flex-shrink:0;">📂 Browse Files</button>
+    </div>
+    <!-- File picker list -->
+    <div id="di-file-picker" style="display:none;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);">选择要导入的文件</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input id="di-filter" type="text" placeholder="筛选文件名…" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);width:140px;" oninput="filterDiFiles()">
+          <button class="btn btn-ghost" onclick="diSelectAll(true)" style="font-size:11px;padding:3px 8px;">全选</button>
+          <button class="btn btn-ghost" onclick="diSelectAll(false)" style="font-size:11px;padding:3px 8px;">全不选</button>
+        </div>
+      </div>
+      <div id="di-file-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface2);"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+        <div id="di-sel-count" style="font-size:12px;color:var(--text3);">已选 0 个文件</div>
+        <button class="btn btn-primary" onclick="importSelected()" id="di-import-btn" style="font-size:12px;padding:7px 16px;">⬇ Import Selected</button>
+      </div>
     </div>
     <!-- Progress bar -->
     <div id="di-progress" style="display:none;margin-bottom:16px;">
@@ -5061,7 +5199,7 @@ function startApp(){
     </div>
     <!-- Result -->
     <div id="di-result" style="display:none;margin-bottom:16px;"></div>
-    <!-- Info box -->
+    <!-- Info box (shown when picker not open) -->
     <div id="di-empty" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:12px;color:var(--text3);line-height:1.6;">
       The scanner will automatically:<br>
       • Detect new files not yet in the system<br>

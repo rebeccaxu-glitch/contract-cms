@@ -583,6 +583,49 @@ app.get('/api/drive/debug', async (req, res) => {
   }
 });
 
+// GET /api/drive/list-all — list all files in Drive folder, marking which are already imported
+app.get('/api/drive/list-all', async (req, res) => {
+  try {
+    const folderId = process.env.DRIVE_FOLDER_ID;
+    if (!folderId) return res.status(500).json({ error: 'Missing DRIVE_FOLDER_ID' });
+    const drive = getDriveClient();
+
+    const listRes = await drive.files.list({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: 'files(id,name,mimeType,modifiedTime)',
+      pageSize: 200,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+    const allFiles = listRes.data.files || [];
+
+    // Check which are already imported
+    const contractsDoc = await db.collection('cms').doc('contracts').get();
+    const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
+    const knownIds = new Set();
+    contracts.forEach(c => {
+      if (c.driveFileId) knownIds.add(c.driveFileId);
+      (c.versions || []).forEach(v => { if (v.driveFileId) knownIds.add(v.driveFileId); });
+    });
+
+    const files = allFiles
+      .filter(f => SUPPORTED_MIME.includes(f.mimeType))
+      .map(f => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        modifiedTime: f.modifiedTime,
+        imported: knownIds.has(f.id)
+      }))
+      .sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
+
+    res.json({ ok: true, files });
+  } catch(e) {
+    console.error('Drive list-all error:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // POST /api/drive/scan — Step 1: list new files only (fast < 2s)
 app.post('/api/drive/scan', async (req, res) => {
   try {
