@@ -383,10 +383,7 @@ textarea.form-input{resize:vertical;}
             <div><label class="form-label">Our Entity</label><select class="form-input" id="f-entity"><option value="">— Select brand first —</option></select></div>
             <div><label class="form-label">Effective Date <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-start" type="date" oninput="updateUploadId()"></div>
             <div><label class="form-label">End Date <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-end" type="date"></div>
-            <div><label class="form-label">Currency</label><select class="form-input" id="f-currency">
-              <option value="">—</option><option>SGD</option><option>USD</option><option>CNY</option><option>HKD</option><option>TWD</option><option>AUD</option><option>EUR</option><option>GBP</option><option>MYR</option>
-            </select></div>
-            <div><label class="form-label">Value / Fees <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-fees" type="text" placeholder="e.g. 50,000 / yr"></div>
+            <div><label class="form-label">Value / Fees <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-fees" type="text" placeholder="e.g. SGD 5,000/月 or CNY 120,000总价 or SGD 3,000/人"></div>
             <div><label class="form-label">Auto-Renewal <span class="ai-badge-sm">AI</span></label>
               <div class="final-toggle">
                 <div class="ftoggle-btn" id="f-ar-yes" onclick="setUploadAutoRenewal(true)">✓ Yes</div>
@@ -620,10 +617,7 @@ textarea.form-input{resize:vertical;}
       </select></div>
       <div><label class="form-label">Effective Date</label><input class="form-input" id="cf-start" type="date" oninput="updateCfId()"></div>
       <div><label class="form-label">End Date</label><input class="form-input" id="cf-end" type="date"></div>
-      <div><label class="form-label">Currency</label><select class="form-input" id="cf-currency">
-        <option value="">—</option><option>SGD</option><option>USD</option><option>CNY</option><option>HKD</option><option>TWD</option><option>AUD</option><option>EUR</option><option>GBP</option><option>MYR</option>
-      </select></div>
-      <div><label class="form-label">Contract Value / Fees <span class="ai-badge-sm">AI</span></label><input class="form-input" id="cf-fees" type="text" placeholder="e.g. 50,000 / yr"></div>
+      <div><label class="form-label">Contract Value / Fees <span class="ai-badge-sm">AI</span></label><input class="form-input" id="cf-fees" type="text" placeholder="e.g. SGD 5,000/月 or CNY 120,000总价 or SGD 3,000/人"></div>
       <div><label class="form-label">Auto-Renewal</label>
         <div class="final-toggle">
           <div class="ftoggle-btn" id="cf-ar-yes" onclick="setCfAutoRenewal(true)">✓ Yes</div>
@@ -1951,7 +1945,7 @@ function renderContracts(){
     var c5=mk('div','',_end||'—');c5.style.cssText='font-size:11px;'+(isExpired?'color:var(--red);':(isExpiring?'color:var(--orange);font-weight:600;':'color:var(--text2);'));
 
     var c6=document.createElement('div');c6.style.cssText='display:flex;align-items:center;gap:3px;';
-    var feesTxt=c.currency&&_fees?'<span style="font-size:9px;padding:1px 3px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);margin-right:2px;">'+c.currency+'</span>'+_fees:(_fees||'—');
+    var feesTxt=_fees||'—';
     var feesSpan=document.createElement('span');feesSpan.innerHTML=feesTxt;feesSpan.style.cssText='flex:1;min-width:0;';
     var feesEdit=mk('span','inline-edit-btn','✎');
     feesEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'fees',id);};})(c.id);
@@ -2242,7 +2236,6 @@ function openContractForm(id){
   // Contract type (input, not select)
   setVal('cf-type',c?c.type||'':'');
   // Currency + fees
-  setOpt('cf-currency',c?c.currency||'SGD':'SGD');
   setVal('cf-fees',c?c.fees||c.amount||'':'');
   // Auto-renewal toggle
   setCfAutoRenewal(c?!!c.autoRenewal:false);
@@ -2269,7 +2262,6 @@ function saveContract(){
     brand:getVal('cf-brand')||null,
     entity:getVal('cf-entity')||null,
     type:getVal('cf-type').trim(),
-    currency:getVal('cf-currency')||'SGD',
     fees:getVal('cf-fees').trim(),
     amount:getVal('cf-fees').trim(), // backward-compat alias
     autoRenewal:cfAutoRenewal,
@@ -2315,7 +2307,7 @@ function openContractDetail(id){
   meta.innerHTML='';
   var brandNames={};BRANDS.forEach(function(b){brandNames[b.key]=b.name;});
   var bLabel=c.brand?(brandNames[c.brand]||c.brand):'--';
-  var feesDisplay=c.fees||c.amount||'--';if(feesDisplay!=='--'&&c.currency)feesDisplay=c.currency+' '+feesDisplay;
+  var feesDisplay=c.fees||c.amount||'--';
   var noticeDisplay=c.noticePeriod?(c.noticePeriod+' '+(c.noticePeriodUnit||'days')):'--';
   var fields=[
     ['Contract ID',c.id],['Counterparty',c.party||'--'],['Contract Type',c.type||'--'],
@@ -2588,7 +2580,6 @@ function showReview(f,data){
   if(data.name)setVal('f-name',data.name);
   if(data.type)setVal('f-type',data.type);
   if(data.party)setVal('f-party',data.party);
-  if(data.currency)setOpt('f-currency',data.currency);
   if(data.fees)setVal('f-fees',data.fees);
   if(data.autoRenewal!=null)setUploadAutoRenewal(!!data.autoRenewal);
   if(data.noticePeriod)setVal('f-notice',data.noticePeriod);
@@ -2622,7 +2613,6 @@ function archiveContract(){
     brand:getVal('f-brand')||null,
     entity:getVal('f-entity')||null,
     type:getVal('f-type'),
-    currency:getVal('f-currency')||'SGD',
     fees:getVal('f-fees')||getVal('f-amount')||'',
     amount:getVal('f-fees')||getVal('f-amount')||'', // backward-compat
     autoRenewal:uploadAutoRenewal,
@@ -2643,7 +2633,7 @@ function resetUpload(){
   showStep(1,true);showStep(2,false);showStep(3,false);showStep(4,false);
   setProgress(0,'');var fi=q('fileInput');if(fi)fi.value='';
 }
-var AI_SYS='你是合同信息提取专家。仔细阅读合同，提取以下信息并严格以JSON返回，不要其他文字：{"name":"合同完整名称","type":"合同类型，如：服务协议/采购合同/保密协议（NDA）/劳动合同/合作协议/租赁合同/技术许可/分销协议/其他","party":"对方当事人全称","currency":"货币代码，如 SGD/USD/CNY/HKD，无则空字符串","fees":"合同金额数字部分，无则空字符串","autoRenewal":true或false,"noticePeriod":"终止通知期数字，无则空字符串","noticePeriodUnit":"days/months/years","startDate":"签署/生效日期YYYY-MM-DD，无则空字符串","endDate":"到期日期YYYY-MM-DD，无则空字符串","summary":"2-3句摘要，说明核心服务内容、关键义务、特别注意事项"}只返回JSON。';
+var AI_SYS='你是合同信息提取专家。仔细阅读合同，提取以下信息并严格以JSON返回，不要其他文字：{"name":"合同完整名称","type":"合同类型，如：服务协议/采购合同/保密协议（NDA）/劳动合同/合作协议/租赁合同/技术许可/分销协议/其他","party":"对方当事人全称","fees":"合同价值的完整描述，包括货币和计费方式，例如\'SGD 5,000/月\'或\'CNY 120,000总价\'或\'SGD 3,000/人\'或\'USD 50,000 one-off\'，无则空字符串","autoRenewal":true或false,"noticePeriod":"终止通知期数字，无则空字符串","noticePeriodUnit":"days/months/years","startDate":"签署/生效日期YYYY-MM-DD，无则空字符串，不要从文件名推断","endDate":"到期日期YYYY-MM-DD，无则空字符串","summary":"2-3句摘要，说明核心服务内容、关键义务、特别注意事项"}只返回JSON。';
 function callAI(b64,isPDF,fname,file){
   var msgs;
   if(isPDF){
