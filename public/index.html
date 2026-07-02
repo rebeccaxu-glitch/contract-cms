@@ -375,10 +375,6 @@ textarea.form-input{resize:vertical;}
             <div><label class="form-label">Counterparty <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-party" type="text"></div>
             <div><label class="form-label">Brand</label><select class="form-input" id="f-brand" onchange="updateUploadEntityOptions()">
               <option value="">— Not specified —</option>
-              <option value="orbitlabs">Orbitlabs</option><option value="techntea">Techntea</option>
-              <option value="anzo">Anzo</option><option value="dlsm">DLSM</option>
-              <option value="ttg">TTG</option><option value="oqtima">Oqtima</option>
-              <option value="limeup">Lime Up</option><option value="paypaz">Paypaz</option>
             </select></div>
             <div><label class="form-label">Our Entity</label><select class="form-input" id="f-entity"><option value="">— Select brand first —</option></select></div>
             <div><label class="form-label">Effective Date <span class="ai-badge-sm">AI</span></label><input class="form-input" id="f-start" type="date" oninput="updateUploadId()"></div>
@@ -603,14 +599,6 @@ textarea.form-input{resize:vertical;}
       <div><label class="form-label">Counterparty *</label><input class="form-input" id="cf-party" type="text" oninput="onCfPartyChange()"></div>
       <div><label class="form-label">Brand</label><select class="form-input" id="cf-brand" onchange="updateEntityOptions()">
         <option value="">— Not specified —</option>
-        <option value="orbitlabs">Orbitlabs</option>
-        <option value="techntea">Techntea</option>
-        <option value="anzo">Anzo</option>
-        <option value="dlsm">DLSM</option>
-        <option value="ttg">TTG</option>
-        <option value="oqtima">Oqtima</option>
-        <option value="limeup">Lime Up</option>
-        <option value="paypaz">Paypaz</option>
       </select></div>
       <div><label class="form-label">Our Entity</label><select class="form-input" id="cf-entity">
         <option value="">— Select brand first —</option>
@@ -1326,6 +1314,7 @@ function navTo(pid){
     var vn=q('nav-view-'+curView);if(vn)vn.classList.add('active');
     renderBrandTree();renderContracts();updateNavCounts();
   }
+  if(pid==='upload')populateBrandSelects(['f-brand']);
   if(pid==='entities')renderGroupList();
   if(pid==='templates')renderTplList();
   if(pid==='alerts'){renderAlertRules();renderAlertList();}
@@ -1630,6 +1619,20 @@ function saveBrands(){
 }
 
 // ── Entity dropdown (contract form) ─────────────────────
+function populateBrandSelects(selIds){
+  // Dynamically fill brand <select> elements from current BRANDS array
+  (selIds||['cf-brand','f-brand']).forEach(function(sid){
+    var sel=q(sid);if(!sel)return;
+    var cur=sel.value; // preserve current selection
+    sel.innerHTML='<option value="">— Not specified —</option>';
+    BRANDS.forEach(function(b){
+      var o=document.createElement('option');
+      o.value=b.key;o.textContent=b.name||b.key;
+      sel.appendChild(o);
+    });
+    if(cur)sel.value=cur; // restore if still valid
+  });
+}
 function updateEntityOptions(){
   var bk=getVal('cf-brand');
   var sel=q('cf-entity');if(!sel)return;
@@ -2231,7 +2234,8 @@ function openContractForm(id){
   setVal('cf-party',c?c.party:'');
   setVal('cf-start',c?c.start:'');
   setVal('cf-end',c?c.end:'');
-  // Brand + entity
+  // Brand + entity — populate from live BRANDS before setting value
+  populateBrandSelects(['cf-brand']);
   setOpt('cf-brand',c?c.brand||'':'');
   updateEntityOptions();
   if(c&&c.entity)setOpt('cf-entity',c.entity);
