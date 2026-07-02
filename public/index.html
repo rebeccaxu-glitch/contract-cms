@@ -4246,11 +4246,47 @@ function updateDiSelCount(){
   q('di-import-btn').disabled = n === 0;
 }
 
+// Expand "container" folders (month folders that contain subfolders) into their children.
+// A folder with subfolders inside = container (e.g. 2025.10); expand to children.
+// A folder with only files = contract version folder; keep as-is for process-folder.
+function _expandContainerFolders(files, callback){
+  var result = [];
+  var queue = files.slice();
+  function step(){
+    if(!queue.length){ callback(result); return; }
+    var f = queue.shift();
+    if(!f.isFolder){ result.push(f); step(); return; }
+    fetch('/api/drive/browse?folderId='+f.id)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(!d.ok){ result.push(f); step(); return; }
+        var items = d.items||[];
+        var hasSubfolders = items.some(function(x){ return x.isFolder; });
+        if(hasSubfolders){
+          // Month/container folder → replace with its children
+          items.forEach(function(x){ result.push(x); });
+        } else {
+          // Contract folder (files only) → keep for process-folder
+          result.push(f);
+        }
+        step();
+      })
+      .catch(function(){ result.push(f); step(); });
+  }
+  step();
+}
+
 function importSelected(){
   var files = Object.values(_diSelectedFiles);
   if(!files.length){ alert('请先选择文件'); return; }
   q('di-file-picker').style.display = 'none';
-  _runDriveScanWithFiles(files);
+  // Show a brief "Expanding folders…" message while we resolve container folders
+  var prog = q('di-progress'), bar = q('di-bar'), txt = q('di-prog-text');
+  prog.style.display = 'block'; bar.style.width = '5%';
+  txt.textContent = '正在解析文件夹结构…';
+  _expandContainerFolders(files, function(expandedFiles){
+    _runDriveScanWithFiles(expandedFiles);
+  });
 }
 
 // ── Template detection helpers ────────────────────────
