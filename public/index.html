@@ -2189,7 +2189,42 @@ function deleteContract(id){
   var c=C.find(function(x){return x.id===id;});
   if(!c||!confirm('确定删除「'+c.name+'」？'))return;
   C=C.filter(function(x){return x.id!==id;});
-  save(SK.C,C);renderContracts();renderDashboard();
+  save(SK.C,C);fbSaveAll();renderContracts();renderDashboard();
+}
+function openPurgeDrive(){
+  var groups={};
+  C.forEach(function(c){
+    if(!c.driveScannedAt)return;
+    var d=c.driveScannedAt.slice(0,10);
+    if(!groups[d])groups[d]=[];
+    groups[d].push(c);
+  });
+  var dates=Object.keys(groups).sort().reverse();
+  var el=document.getElementById('di-purge-list');
+  var sec=document.getElementById('di-purge-section');
+  sec.style.display='block';
+  if(!dates.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0;">没有找到 Drive 导入的合同</div>';
+    return;
+  }
+  el.innerHTML=dates.map(function(d){
+    var cnt=groups[d].length;
+    var names=groups[d].map(function(c){return c.name;}).join('、');
+    return '<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">'+
+      '<div style="min-width:0;"><div style="font-size:12px;color:var(--text);font-weight:500;">'+d+'<span style="color:var(--text3);font-weight:400;margin-left:6px;">共 '+cnt+' 份</span></div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;" title="'+names+'">'+names+'</div></div>'+
+      '<button class="btn btn-ghost" onclick="purgeDriveByDate(\''+d+'\')" style="font-size:11px;padding:3px 10px;color:var(--red);flex-shrink:0;border-color:var(--red);">撤回</button>'+
+      '</div>';
+  }).join('');
+}
+function purgeDriveByDate(dateStr){
+  var toDelete=C.filter(function(c){return c.driveScannedAt&&c.driveScannedAt.slice(0,10)===dateStr;});
+  if(!toDelete.length)return;
+  if(!confirm('确定撤回 '+dateStr+' 导入的 '+toDelete.length+' 份合同？此操作不可恢复。'))return;
+  var ids=toDelete.map(function(c){return c.id;});
+  C=C.filter(function(c){return ids.indexOf(c.id)===-1;});
+  save(SK.C,C);fbSaveAll();renderContracts();renderDashboard();
+  openPurgeDrive();
 }
 function openContractForm(id){
   editCid=id||null;
@@ -4133,33 +4168,21 @@ function _renderDiItems(items){
     row.onmouseover = function(){ this.style.background='var(--al)'; };
     row.onmouseout = function(){ this.style.background=''; };
 
-    // Checkbox to select entire folder
+    // Checkbox — select entire folder as ONE contract
     var cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.id = 'fcb_' + f.id;
     cb.onchange = (function(fid, fname, checkbox){return function(){
       var status = document.getElementById('fst_' + fid);
       if(checkbox.checked){
-        if(status) status.textContent = '⏳';
-        fetch('/api/drive/browse?folderId=' + fid).then(function(r){return r.json();}).then(function(d){
-          var count = 0;
-          (d.items||[]).filter(function(x){return !x.isFolder;}).forEach(function(x){
-            _diSelectedFiles[x.id] = {id:x.id, name:x.name, mimeType:x.mimeType};
-            count++;
-          });
-          if(status) status.textContent = count + ' 个文件';
-          updateDiSelCount();
-        }).catch(function(){ checkbox.checked=false; if(status) status.textContent=''; });
+        // Mark folder as a contract bundle (isFolder flag)
+        _diSelectedFiles['folder_' + fid] = {id: fid, name: fname, mimeType: 'folder', isFolder: true};
+        if(status) status.textContent = '📦 合同包';
       } else {
-        // Deselect: need to unselect files from this folder
-        fetch('/api/drive/browse?folderId=' + fid).then(function(r){return r.json();}).then(function(d){
-          (d.items||[]).filter(function(x){return !x.isFolder;}).forEach(function(x){
-            delete _diSelectedFiles[x.id];
-          });
-          if(status) status.textContent='';
-          updateDiSelCount();
-        }).catch(function(){});
+        delete _diSelectedFiles['folder_' + fid];
+        if(status) status.textContent = '';
       }
+      updateDiSelCount();
     };})(f.id, f.name, cb);
 
     var icon = document.createElement('span'); icon.textContent = '📁'; icon.style.cssText='font-size:15px;cursor:pointer;';
@@ -4259,9 +4282,17 @@ function _runDriveScanWithFiles(files){
     var f = files[i];
     txt.textContent = '正在处理 ' + (i+1) + ' / ' + total + '：' + f.name;
     bar.style.width = Math.round((i/total)*100) + '%';
-    fetch('/api/drive/process', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fileId:f.id, fileName:f.name, mimeType:f.mimeType }) })
+    var url, body;
+    if(f.isFolder){
+      url = '/api/drive/process-folder';
+      body = JSON.stringify({ folderId: f.id, folderName: f.name });
+    } else {
+      url = '/api/drive/process';
+      body = JSON.stringify({ fileId: f.id, fileName: f.name, mimeType: f.mimeType });
+    }
+    fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: body })
       .then(function(r){ return r.json(); }).then(function(r){
-        if(r.skipped) skipped++;
+        if(r.skipped||r.action==='skipped') skipped++;
         else if(r.action==='added'){ if(r.status==='active') added++; else reviewing++; }
         else if(r.action==='upgraded') added++;
         else if(r.action==='version_added') reviewing++;
@@ -5296,6 +5327,16 @@ function startApp(){
       <button class="btn btn-ghost" id="di-migrate-btn" onclick="runMigrateIds()" style="font-size:12px;">🔢 Migrate IDs</button>
     </div>
     <div id="di-migrate-result" style="font-size:12px;color:var(--text3);margin-top:6px;display:none;"></div>
+    <!-- Purge Drive imports by date -->
+    <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:12px;color:var(--text3);">按扫描日期批量撤回 Drive 导入</div>
+        <button class="btn btn-ghost" onclick="openPurgeDrive()" style="font-size:12px;color:var(--red);">🗑 撤回导入</button>
+      </div>
+      <div id="di-purge-section" style="display:none;margin-top:10px;">
+        <div id="di-purge-list"></div>
+      </div>
+    </div>
     <div style="display:flex;justify-content:flex-end;margin-top:16px;">
       <button class="btn btn-ghost" onclick="closeModal('modal-drive-import')">Close</button>
     </div>
