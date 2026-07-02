@@ -411,6 +411,15 @@ function hasSignedKeyword(fileName) {
   return /signed|final|executed|countersigned|_sign[_\-\s]|签署[版稿]?|盖章|签字版|execution\s*copy/i.test(fileName || '');
 }
 
+// Classify a file's version type from its filename
+function classifyVersionType(fileName) {
+  const n = fileName || '';
+  if (hasSignedKeyword(n)) return { type: 'final', note: '签署版（Drive 导入）', isSigned: true };
+  if (/审核|review|reviewed|审阅|audit/i.test(n)) return { type: 'review', note: '审核稿（Drive 导入）', isSigned: false };
+  if (/v\d|版本|revision|draft|草稿|修改|redline|markup|comment/i.test(n)) return { type: 'draft', note: '修改稿（Drive 导入）', isSigned: false };
+  return { type: 'draft', note: '草稿（Drive 导入）', isSigned: false };
+}
+
 // Fuzzy counterparty match (first 8 normalised chars overlap)
 function cpMatch(a, b) {
   if (!a || !b) return false;
@@ -634,6 +643,113 @@ app.post('/api/drive/scan', async (req, res) => {
     res.json({ ok: true, total, newFiles, skipped });
   } catch(e) {
     console.error('Drive list error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/drive/process-folder — import a folder as ONE contract with versions
+app.post('/api/drive/process-folder', async (req, res) => {
+  try {
+    const { folderId, folderName } = req.body;
+    if (!folderId || !folderName) return res.status(400).json({ error: 'Missing folderId or folderName' });
+    const drive = getDriveClient();
+
+    // List all files in the folder
+    const r = await drive.files.list({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: 'files(id,name,mimeType,modifiedTime)',
+      pageSize: 50,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+    const folderFiles = (r.data.files || []).filter(f => SUPPORTED_MIME.includes(f.mimeType));
+    if (!folderFiles.length) return res.json({ ok: true, action: 'skipped', reason: 'no_supported_files' });
+
+    const contractsDoc = await db.collection('cms').doc('contracts').get();
+    const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
+
+    // Check if this folder is already imported (any file in it is known)
+    const knownIds = new Set();
+    contracts.forEach(c => {
+      if (c.driveFileId) knownIds.add(c.driveFileId);
+      if (c.driveFolderId) knownIds.add(c.driveFolderId);
+      (c.versions || []).forEach(v => { if (v.driveFileId) knownIds.add(v.driveFileId); });
+    });
+    if (knownIds.has(folderId)) return res.json({ ok: true, action: 'skipped', reason: 'already_imported' });
+
+    // Pick the best file for AI extraction:
+    // Priority: signed PDF > any PDF > signed DOCX > any DOCX
+    const signed = folderFiles.filter(f => hasSignedKeyword(f.name));
+    const pdfs = folderFiles.filter(f => f.mimeType === 'application/pdf');
+    const signedPdfs = signed.filter(f => f.mimeType === 'application/pdf');
+    const mainFile = signedPdfs[0] || pdfs[0] || signed[0] || folderFiles[0];
+
+    // Download and run AI on the main file
+    let buffer, mime = mainFile.mimeType;
+    if (mime === 'application/vnd.google-apps.document') {
+      const ex = await drive.files.export({ fileId: mainFile.id, mimeType: 'application/pdf', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+      buffer = Buffer.from(ex.data); mime = 'application/pdf';
+    } else {
+      const ex = await drive.files.get({ fileId: mainFile.id, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+      buffer = Buffer.from(ex.data);
+    }
+    const x = await extractWithClaude(buffer, mime, mainFile.name);
+
+    // Override name with folder name (more reliable than AI-extracted name)
+    x.name = x.name || folderName;
+
+    const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction)
+      || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction);
+
+    // Build versions: signed = 签署版 (final), others classified by filename keywords
+    const versions = folderFiles.map(f => {
+      const cls = classifyVersionType(f.name);
+      return {
+        id: 'v' + Date.now() + Math.random().toString(36).slice(2, 5),
+        type: cls.type,
+        isSigned: cls.isSigned,
+        driveFileId: f.id,
+        driveFileName: f.name,
+        fileName: f.name,
+        scannedAt: new Date().toISOString(),
+        note: cls.note
+      };
+    });
+
+    const hasSigned = versions.some(v => v.isSigned);
+    const record = {
+      id: makeContractId(x.startDate, contracts),
+      name: folderName,
+      party: x.counterparty || '',
+      entity: (resolved && resolved.entity) || x.ourEntity || '',
+      brand: (resolved && resolved.brand) || null,
+      isIntercompany: x.type === 'intercompany',
+      type: x.contractType || '',
+      start: x.startDate || '',
+      end: x.endDate || '',
+      fees: x.value ? String(x.value) : '',
+      currency: x.currency || 'SGD',
+      autoRenewal: x.autoRenew || false,
+      noticePeriod: x.noticePeriod || null,
+      noticePeriodUnit: 'days',
+      status: hasSigned ? 'active' : 'reviewing',
+      notes: x.summary || '',
+      driveFolderId: folderId,
+      driveFolderName: folderName,
+      driveFileId: mainFile.id,
+      driveFileName: mainFile.name,
+      driveScannedAt: new Date().toISOString(),
+      aiConfidence: x.confidence || 'medium',
+      brandResolved: !!(resolved),
+      hasSigned,
+      versions,
+      createdAt: new Date().toISOString()
+    };
+
+    await db.collection('cms').doc('contracts').set({ data: [...contracts, record] });
+    return res.json({ ok: true, action: 'added', name: record.name, status: record.status, versions: versions.length });
+  } catch(e) {
+    console.error('process-folder error:', e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
