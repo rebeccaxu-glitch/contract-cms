@@ -4253,35 +4253,115 @@ function importSelected(){
   _runDriveScanWithFiles(files);
 }
 
+// ── Template detection helpers ────────────────────────
+function _isTemplateName(name){
+  return /^template[\s_\-]/i.test(name||'');
+}
+function _importDriveTemplate(file){
+  // Strip "Template " prefix and extension for display name
+  var rawName = (file.name||'').replace(/\.(pdf|docx?|xlsx?)$/i,'');
+  var cleanName = rawName.replace(/^template[\s_\-]*/i,'').trim();
+  // Try to match entity from BRANDS by keyword in name
+  var entityRef = null;
+  var normClean = cleanName.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
+  for(var i=0;i<BRANDS.length&&!entityRef;i++){
+    var b=BRANDS[i];
+    for(var j=0;j<b.entities.length&&!entityRef;j++){
+      var en=b.entities[j].name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
+      if(en.length>=2&&(normClean.indexOf(en)>-1||en.indexOf(normClean.slice(0,6))>-1)){
+        entityRef=b.key+'::'+b.entities[j].name;
+      }
+    }
+  }
+  // Find or create template folder for this entity
+  var folder=null;
+  if(entityRef){
+    folder=T.find(function(f){return f.entityRef===entityRef;});
+    if(!folder){
+      var parts=entityRef.split('::');
+      folder={id:++M.nextFId,name:parts[1]||entityRef,entityRef:entityRef,icon:'📁',desc:'',files:[]};
+      T.push(folder);
+    }
+  }
+  if(!folder){
+    folder=T.find(function(f){return f.name==='Drive Templates'&&!f.entityRef;});
+    if(!folder){
+      folder={id:++M.nextFId,name:'Drive Templates',icon:'📁',desc:'Imported from Drive',files:[]};
+      T.push(folder);
+    }
+  }
+  // Skip if already imported
+  var dup=folder.files.find(function(tf){return tf.driveFileId===file.id;});
+  if(dup)return{skipped:true};
+  // Guess type
+  var ttype='Other';
+  if(/nda|保密|confidential|non.?disclosure|资讯安全|資訊安全/i.test(cleanName)) ttype='NDA';
+  else if(/employ|labour|labor|劳动|雇佣|雇用/i.test(cleanName)) ttype='Employment';
+  else if(/service|服务|服務/i.test(cleanName)) ttype='Service';
+  else if(/timesheet|考勤|工时|工時/i.test(cleanName)) ttype='Timesheet';
+  else if(/lease|租赁|租賃/i.test(cleanName)) ttype='Lease';
+  else if(/loan|借款/i.test(cleanName)) ttype='Loan';
+  else if(/设备|裝置|equipment|同意|consent|agreement/i.test(cleanName)) ttype='Other';
+  var hasChinese=/[一-鿿]/.test(cleanName);
+  var newTf={
+    id:++M.nextFId,
+    name:cleanName,
+    type:ttype,
+    lang:hasChinese?'ZH':'EN',
+    ver:'',
+    added:new Date().toISOString().slice(0,10),
+    driveFileId:file.id,
+    driveFileName:file.name,
+    fileName:file.name,
+    storageUrl:'/api/drive/file/'+file.id,
+    fileType:(/\.pdf$/i.test(file.name)?'application/pdf':(/\.xlsx?$/i.test(file.name)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/vnd.openxmlformats-officedocument.wordprocessingml.document')),
+    hasFile:true
+  };
+  folder.files.push(newTf);
+  save(SK.T,T);save(SK.M,M);
+  fbSaveAll();
+  return{ok:true,action:'template_added'};
+}
+
 function _runDriveScanWithFiles(files){
   if(diScanning) return;
   diScanning = true;
   var prog = q('di-progress'), bar = q('di-bar'), txt = q('di-prog-text'), res = q('di-result');
   prog.style.display = 'block'; bar.style.width = '0%'; res.style.display = 'none';
-  var total = files.length, done = 0, added = 0, reviewing = 0, errors = 0, skipped = 0;
+  var total = files.length, done = 0, added = 0, reviewing = 0, errors = 0, skipped = 0, templates = 0;
   txt.textContent = '正在处理 0 / ' + total + '…';
 
   function processNext(i){
     if(i >= files.length){
       diScanning = false;
       prog.style.display = 'none';
-      var a=added, rv=reviewing, e=errors, sk=skipped;
+      var a=added, rv=reviewing, e=errors, sk=skipped, tp=templates;
       res.style.display = 'block';
       res.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">✅ 完成！</div>'
-        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">'
+        +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">'
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--accent);">'+a+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Added</div></div>'
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--yellow);">'+rv+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Reviewing</div></div>'
+        +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#7c5cbf;">'+tp+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Templates</div></div>'
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text3);">'+sk+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Skipped</div></div>'
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+e+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
         +'</div>';
       if(a + rv > 0){
         fbLoadAll().then(function(){ renderDashboard(); renderContracts(); updateNavCounts(); }).catch(function(){});
       }
+      if(tp > 0) renderTplList();
       return;
     }
     var f = files[i];
     txt.textContent = '正在处理 ' + (i+1) + ' / ' + total + '：' + f.name;
     bar.style.width = Math.round((i/total)*100) + '%';
+
+    // Route Template-prefixed files to Templates section (client-side, no server call)
+    if(!f.isFolder && _isTemplateName(f.name)){
+      var tr = _importDriveTemplate(f);
+      if(tr.skipped) skipped++; else if(tr.ok) templates++; else errors++;
+      done++; processNext(i+1); return;
+    }
+
     var url, body;
     if(f.isFolder){
       url = '/api/drive/process-folder';
