@@ -1946,7 +1946,9 @@ function renderContracts(){
 
     var c6=document.createElement('div');c6.style.cssText='display:flex;align-items:center;gap:3px;';
     var feesTxt=_fees||'—';
-    var feesSpan=document.createElement('span');feesSpan.innerHTML=feesTxt;feesSpan.style.cssText='flex:1;min-width:0;';
+    var feesSpan=document.createElement('span');feesSpan.innerHTML=feesTxt;
+    feesSpan.title=_fees||'';
+    feesSpan.style.cssText='flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;';
     var feesEdit=mk('span','inline-edit-btn','✎');
     feesEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'fees',id);};})(c.id);
     c6.appendChild(feesSpan);c6.appendChild(feesEdit);
