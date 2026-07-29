@@ -14,13 +14,20 @@ const { google }     = require('googleapis');
 const mammoth        = require('mammoth');
 
 // ── Firebase Admin 初始化 ────────────────────────────────
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-admin.initializeApp({
-  credential:    admin.credential.cert(serviceAccount),
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET  // e.g. contract-managementv4.firebasestorage.app
-});
-const db     = admin.firestore();
-const bucket = admin.storage().bucket();
+let db, bucket, _initError = null;
+try {
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+  admin.initializeApp({
+    credential:    admin.credential.cert(serviceAccount),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+  });
+  db     = admin.firestore();
+  bucket = admin.storage().bucket();
+  console.log('[STARTUP] Firebase init OK');
+} catch(e) {
+  _initError = e.message;
+  console.error('[STARTUP] Firebase init FAILED:', e.message);
+}
 
 // ── Express 初始化 ───────────────────────────────────────
 const app    = express();
@@ -31,6 +38,26 @@ const upload = multer({
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ══════════════════════════════════════════════════════════
+//  API：诊断
+// ══════════════════════════════════════════════════════════
+
+// GET /api/health — 返回启动状态，无需 Firebase 即可访问
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: !_initError,
+    initError: _initError || null,
+    env: {
+      FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+      FIREBASE_STORAGE_BUCKET:  !!process.env.FIREBASE_STORAGE_BUCKET,
+      ANTHROPIC_API_KEY:        !!process.env.ANTHROPIC_API_KEY,
+      GOOGLE_SERVICE_ACCOUNT:   !!process.env.GOOGLE_SERVICE_ACCOUNT,
+    },
+    node: process.version,
+    ts:   new Date().toISOString()
+  });
+});
 
 // ══════════════════════════════════════════════════════════
 //  API：数据（Firestore）
@@ -249,35 +276,27 @@ function autoGenCoreWords(entityName) {
   return [...new Set(coreWords)].filter(Boolean);
 }
 
-// Build merged entity registry: hardcoded + dynamic entries from Firestore BRANDS
-// Cached for 60s to avoid repeated Firestore reads within one deployment session
-let _registryCache = null, _registryCacheTs = 0;
+// Build merged entity registry: hardcoded ENTITY_REGISTRY + dynamic brands from Firestore
 async function getEntityRegistry() {
-  const now = Date.now();
-  if (_registryCache && now - _registryCacheTs < 60000) return _registryCache;
   let registry = [...ENTITY_REGISTRY];
   try {
     const brandsDoc = await db.collection('cms').doc('brands').get();
     if (brandsDoc.exists) {
       const brands = brandsDoc.data().data || [];
-      brands.forEach(brand => {
-        (brand.entities || []).forEach(ent => {
-          // Skip if already covered by hardcoded registry (exact name match)
-          const alreadyCovered = registry.some(r => r.name === ent.name);
-          if (!alreadyCovered) {
+      for (const brand of brands) {
+        for (const ent of (brand.entities || [])) {
+          if (!registry.some(r => r.name === ent.name)) {
             const coreWords = autoGenCoreWords(ent.name);
             if (coreWords.length > 0) {
-              registry.push({ brand: brand.key, name: ent.name, flag: ent.flag || '🏳️', coreWords });
+              registry.push({ brand: brand.key, name: ent.name, flag: ent.flag || '', coreWords });
             }
           }
-        });
-      });
+        }
+      }
     }
   } catch(e) {
-    console.warn('Could not load dynamic brands from Firestore:', e.message);
+    console.warn('getEntityRegistry fallback to static:', e.message);
   }
-  _registryCache = registry;
-  _registryCacheTs = now;
   return registry;
 }
 
