@@ -4382,7 +4382,15 @@ function _runDriveScanWithFiles(files){
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+e+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
         +'</div>';
       if(a + rv > 0){
-        fbLoadAll().then(function(){ renderDashboard(); renderContracts(); updateNavCounts(); }).catch(function(){});
+        fbLoadAll().then(function(){
+          // Reset all filters so newly imported contracts are visible
+          curView='all'; curFilter='all'; curBrandFilter=null; curEntityFilter=null;
+          curIcType=null; curIcEntity=null; curIcCp=null;
+          renderDashboard(); renderContracts(); updateNavCounts(); _refreshSidebarActive();
+        }).catch(function(err){
+          console.error('fbLoadAll after import failed:', err);
+          location.reload(); // fallback: full reload guarantees fresh data
+        });
       }
       if(tp > 0) renderTplList();
       return;
@@ -4527,8 +4535,13 @@ function startDriveScan(){
     }
     if(a+rv>0){
       fbLoadAll().then(function(){
-        renderDashboard();renderContracts();renderGroupList();updateNavCounts();
-      }).catch(function(){});
+        curView='all'; curFilter='all'; curBrandFilter=null; curEntityFilter=null;
+        curIcType=null; curIcEntity=null; curIcCp=null;
+        renderDashboard();renderContracts();renderGroupList();updateNavCounts();_refreshSidebarActive();
+      }).catch(function(err){
+        console.error('fbLoadAll after scan failed:', err);
+        location.reload();
+      });
     }
   }
 
