@@ -838,6 +838,8 @@ function fbSaveAll(){
   fbDb.collection('cms').doc('templates').set({ data: stripFileData(T) });
   fbDb.collection('cms').doc('meta').set({ data: M });
   fbDb.collection('cms').doc('timeline').set({ data: TL||[] });
+  // Save BRANDS so server-side entity matching stays in sync
+  fbDb.collection('cms').doc('brands').set({ data: BRANDS });
 }
 
 // ── Load all data from Firestore ─────────────────────
@@ -849,7 +851,8 @@ function fbLoadAll(){
       fbDb.collection('cms').doc('entities').get(),
       fbDb.collection('cms').doc('templates').get(),
       fbDb.collection('cms').doc('meta').get(),
-      fbDb.collection('cms').doc('timeline').get()
+      fbDb.collection('cms').doc('timeline').get(),
+      fbDb.collection('cms').doc('brands').get()
     ]);
   }).then(function(docs){
     if(docs[0].exists && docs[0].data().data) C  = docs[0].data().data;
@@ -857,6 +860,7 @@ function fbLoadAll(){
     if(docs[2].exists && docs[2].data().data) T  = docs[2].data().data;
     if(docs[3].exists && docs[3].data().data) M  = docs[3].data().data;
     if(docs[4].exists && docs[4].data().data) TL = docs[4].data().data;
+    if(docs[5].exists && docs[5].data().data) BRANDS = docs[5].data().data;
     showLoadingOverlay(false);
     console.log('Firebase data loaded: '+C.length+' contracts');
   }).catch(function(err){

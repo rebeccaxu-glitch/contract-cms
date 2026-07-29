@@ -237,15 +237,60 @@ function normStr(s) {
     .trim();
 }
 
+// Auto-generate coreWords from an entity name (strip legal suffixes, take meaningful words)
+function autoGenCoreWords(entityName) {
+  const clean = normStr(entityName)
+    .replace(/\b(pte|ltd|limited|inc|corp|pty|llc|co|company|holding|holdings|group|services|global|international|sdn|bhd|aust|australia)\b/g, '')
+    .replace(/\s+/g, ' ').trim();
+  const words = clean.split(' ').filter(w => w.length > 1);
+  const coreWords = [];
+  if (clean.length > 2) coreWords.push(clean);
+  if (words[0] && words[0].length > 2 && words[0] !== clean) coreWords.push(words[0]);
+  return [...new Set(coreWords)].filter(Boolean);
+}
+
+// Build merged entity registry: hardcoded + dynamic entries from Firestore BRANDS
+// Cached for 60s to avoid repeated Firestore reads within one deployment session
+let _registryCache = null, _registryCacheTs = 0;
+async function getEntityRegistry() {
+  const now = Date.now();
+  if (_registryCache && now - _registryCacheTs < 60000) return _registryCache;
+  let registry = [...ENTITY_REGISTRY];
+  try {
+    const brandsDoc = await db.collection('cms').doc('brands').get();
+    if (brandsDoc.exists) {
+      const brands = brandsDoc.data().data || [];
+      brands.forEach(brand => {
+        (brand.entities || []).forEach(ent => {
+          // Skip if already covered by hardcoded registry (exact name match)
+          const alreadyCovered = registry.some(r => r.name === ent.name);
+          if (!alreadyCovered) {
+            const coreWords = autoGenCoreWords(ent.name);
+            if (coreWords.length > 0) {
+              registry.push({ brand: brand.key, name: ent.name, flag: ent.flag || '🏳️', coreWords });
+            }
+          }
+        });
+      });
+    }
+  } catch(e) {
+    console.warn('Could not load dynamic brands from Firestore:', e.message);
+  }
+  _registryCache = registry;
+  _registryCacheTs = now;
+  return registry;
+}
+
 // Resolve entity name + optional jurisdiction → { brand, entity } or null
-function resolveEntityInfo(entityName, jurisdiction) {
+function resolveEntityInfo(entityName, jurisdiction, registry) {
   if (!entityName || !entityName.trim()) return null;
   const ni = normStr(entityName);
   const nj = normStr(jurisdiction || '');
+  const reg = registry || ENTITY_REGISTRY;
 
   let bestMatch = null, bestScore = 0;
 
-  for (const ent of ENTITY_REGISTRY) {
+  for (const ent of reg) {
     // 1. Check core word match (first match wins for same score)
     const cw = ent.coreWords.find(w => ni.includes(normStr(w)));
     if (!cw) continue;
@@ -509,9 +554,10 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
     }
   }
 
-  // Resolve brand + entity using registry
-  const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction)
-    || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction);
+  // Resolve brand + entity using merged (hardcoded + Firestore) registry
+  const registry = await getEntityRegistry();
+  const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction, registry)
+    || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction, registry);
 
   // New contract record — field names match frontend expectations
   const record = {
@@ -696,8 +742,9 @@ app.post('/api/drive/process-folder', async (req, res) => {
     // Override name with folder name (more reliable than AI-extracted name)
     x.name = x.name || folderName;
 
-    const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction)
-      || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction);
+    const registry = await getEntityRegistry();
+    const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction, registry)
+      || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction, registry);
 
     // Build versions: signed = 签署版 (final), others classified by filename keywords
     const versions = folderFiles.map(f => {
@@ -887,8 +934,9 @@ app.get('/api/drive/migrate-fields', async (req, res) => {
 
       // ── Step 2: re-run brand+entity resolution ───────────
       // Try ourEntity (from 'entity' field) first, then counterparty ('party')
-      const resolved = resolveEntityInfo(fixed.entity, null)
-        || resolveEntityInfo(fixed.party, null);
+      const registry = await getEntityRegistry();
+      const resolved = resolveEntityInfo(fixed.entity, null, registry)
+        || resolveEntityInfo(fixed.party, null, registry);
 
       if (resolved) {
         fixed.brand = resolved.brand;
