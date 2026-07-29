@@ -4354,8 +4354,17 @@ function _importDriveTemplate(file){
     hasFile:true
   };
   folder.files.push(newTf);
-  save(SK.T,T);save(SK.M,M);
-  fbSaveAll();
+  // Save to localStorage only — do NOT call fbSaveAll() here because that would
+  // overwrite cms/contracts in Firestore with the stale client-side C array,
+  // racing with and destroying contracts being saved by the server in parallel.
+  _suppressFbSync = true;
+  save(SK.T,T); save(SK.M,M);
+  _suppressFbSync = false;
+  // Selectively push only templates + meta to Firestore (never contracts)
+  if(fbReady && fbDb){
+    fbDb.collection('cms').doc('templates').set({ data: T });
+    fbDb.collection('cms').doc('meta').set({ data: M });
+  }
   return{ok:true,action:'template_added'};
 }
 
