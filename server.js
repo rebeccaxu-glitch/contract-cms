@@ -348,6 +348,11 @@ function getDriveClient() {
   return google.drive({ version: 'v3', auth });
 }
 
+// Known entity names used in the AI prompt so Claude can distinguish "our" side from counterparty
+function _ourEntityNames() {
+  return ENTITY_REGISTRY.map(function(e){ return e.name; }).join(', ');
+}
+
 async function extractWithClaude(fileBuffer, mimeType, fileName) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const base64 = Buffer.from(fileBuffer).toString('base64');
@@ -371,15 +376,25 @@ async function extractWithClaude(fileBuffer, mimeType, fileName) {
     ? 'Note: the filename suggests this may be a signed/executed copy.'
     : '';
 
+  const ourEntities = _ourEntityNames();
   contentParts.push({
     type: 'text',
     text: `Filename: "${fileName}"
 ${fileHint}
 
+Our company group entities (for reference — these are all "our" side):
+${ourEntities}
+
+IMPORTANT rules for party identification:
+- "ourEntity" = the party that belongs to our company group (listed above). Extract its exact legal name as written in the document.
+- "counterparty" = the OTHER party — always a company OUTSIDE our group. NEVER set counterparty to the same entity as ourEntity.
+- If BOTH parties are from our group (intercompany), set type="intercompany", ourEntity = one side, counterparty = the other.
+- If you cannot clearly identify our entity, set ourEntity=null and counterparty=the main external party name.
+
 Analyse this contract and return ONLY a valid JSON object (no markdown, no explanation):
 {
   "name": "full contract title",
-  "counterparty": "counterparty company full legal name exactly as written",
+  "counterparty": "the external counterparty's full legal name exactly as written — never the same as ourEntity",
   "counterpartyJurisdiction": "counterparty country/jurisdiction of incorporation (2-letter ISO code preferred, e.g. SG, CN, HK, AU, BZ, KE, VU, MU, CY, SC, BVI, MY, TW) or null",
   "ourEntity": "our company entity full legal name exactly as written, or null",
   "ourEntityJurisdiction": "our entity country/jurisdiction of incorporation (2-letter ISO code preferred) or null",
