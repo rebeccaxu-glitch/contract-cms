@@ -912,6 +912,9 @@ app.get('/api/drive/migrate-fields', async (req, res) => {
     const contracts = doc.data().data || [];
     let fieldFixed = 0, brandResolved = 0, brandUnresolved = 0;
 
+    // Fetch registry once before the synchronous map
+    const registry = await getEntityRegistry();
+
     const updated = contracts.map(c => {
       // ── Step 1: fix old field names ──────────────────────
       const needsFieldFix = c.counterparty !== undefined || c.startDate !== undefined || c.endDate !== undefined;
@@ -933,8 +936,6 @@ app.get('/api/drive/migrate-fields', async (req, res) => {
       };
 
       // ── Step 2: re-run brand+entity resolution ───────────
-      // Try ourEntity (from 'entity' field) first, then counterparty ('party')
-      const registry = await getEntityRegistry();
       const resolved = resolveEntityInfo(fixed.entity, null, registry)
         || resolveEntityInfo(fixed.party, null, registry);
 
