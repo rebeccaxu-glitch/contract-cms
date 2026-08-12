@@ -9,7 +9,7 @@
 :root{--bg:#f4f1ea;--surface:#fdfcf8;--surface2:#edeae0;--border:#ddd8cc;--accent:#2a7a52;--al:rgba(42,122,82,0.10);--am:rgba(42,122,82,0.20);--text:#1c2a1f;--text2:#4a6055;--text3:#8a9e92;--red:#b83232;--rl:rgba(184,50,50,0.10);--orange:#b85a1a;--ol:rgba(184,90,26,0.10);--yellow:#8a6a00;--yl:rgba(138,106,0,0.10);--blue:#1a5a8a;--bl:rgba(26,90,138,0.10);}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden;font-size:14px;}
-.sidebar{width:234px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar{width:234px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:relative;}
 .logo{padding:22px 20px 18px;border-bottom:1px solid var(--border);}
 .logo-tag{font-size:10px;font-weight:700;letter-spacing:3px;color:var(--accent);font-family:'JetBrains Mono',monospace;}
 .logo-name{font-size:16px;font-weight:700;margin-top:3px;}
@@ -254,7 +254,11 @@ textarea.form-input{resize:vertical;}
     </button>
   </div>
 </div>
-<aside class="sidebar">
+<aside class="sidebar" id="main-sidebar">
+  <!-- Sidebar resize handle -->
+  <div id="sb-resize-handle" style="position:absolute;right:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:100;display:flex;align-items:center;justify-content:center;" title="拖动调整宽度">
+    <div id="sb-resize-line" style="width:2px;height:100%;border-radius:1px;background:transparent;pointer-events:none;transition:background .15s;"></div>
+  </div>
   <div class="logo"><div class="logo-tag">CMS</div><div class="logo-name">Contracts</div></div>
   <nav class="nav" style="flex:1;overflow-y:auto;padding-bottom:8px;">
     <!-- ① All contracts -->
@@ -1128,6 +1132,13 @@ function _applyColWidths(){
   });
 }
 var _rzDragging=false,_rzColIdx=-1,_rzStartX=0,_rzStartW=0,_rzActiveLine=null;
+// ── Resizable sidebar ───────────────────────────────────────────────
+var SB_WIDTH_DEFAULT=234;
+var SB_WIDTH=(function(){
+  try{var s=localStorage.getItem('cms_sb_width');if(s){var n=parseInt(s);if(n>=140&&n<=400)return n;}}catch(e){}
+  return SB_WIDTH_DEFAULT;
+})();
+var _sbDragging=false,_sbStartX=0,_sbStartW=0;
 var selTplIcon  = '📁';
 
 var GRP_ICONS = ['🏛','🏢','🌏','🏗','💼','🚀','⚖','🔐','🌐','💰','🤝','🏭'];
@@ -3581,19 +3592,61 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // Column resize drag handlers
   document.addEventListener('mousemove', function(e){
-    if(!_rzDragging) return;
-    var diff = e.clientX - _rzStartX;
-    COL_WIDTHS[_rzColIdx] = Math.max(50, _rzStartW + diff);
-    _applyColWidths();
+    if(_rzDragging){
+      var diff = e.clientX - _rzStartX;
+      COL_WIDTHS[_rzColIdx] = Math.max(50, _rzStartW + diff);
+      _applyColWidths();
+    }
+    if(_sbDragging){
+      var sbEl=document.getElementById('main-sidebar');
+      if(sbEl){
+        var w=Math.max(140, Math.min(400, _sbStartW + e.clientX - _sbStartX));
+        sbEl.style.width=w+'px';
+      }
+    }
   });
   document.addEventListener('mouseup', function(){
-    if(!_rzDragging) return;
-    _rzDragging = false;
-    if(_rzActiveLine){ _rzActiveLine.style.background='transparent'; _rzActiveLine=null; }
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    try{ localStorage.setItem('cms_col_widths', JSON.stringify(COL_WIDTHS)); }catch(e){}
+    if(_rzDragging){
+      _rzDragging = false;
+      if(_rzActiveLine){ _rzActiveLine.style.background='transparent'; _rzActiveLine=null; }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try{ localStorage.setItem('cms_col_widths', JSON.stringify(COL_WIDTHS)); }catch(e){}
+    }
+    if(_sbDragging){
+      _sbDragging = false;
+      var line=document.getElementById('sb-resize-line');
+      if(line) line.style.background='transparent';
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      var sbEl=document.getElementById('main-sidebar');
+      if(sbEl) try{ localStorage.setItem('cms_sb_width', parseInt(sbEl.style.width||SB_WIDTH)); }catch(e){}
+    }
   });
+
+  // Sidebar resize handle events
+  var sbHandle=document.getElementById('sb-resize-handle');
+  var sbLine=document.getElementById('sb-resize-line');
+  if(sbHandle){
+    sbHandle.addEventListener('mouseenter',function(){ if(!_sbDragging) sbLine.style.background='var(--accent)'; });
+    sbHandle.addEventListener('mouseleave',function(){ if(!_sbDragging) sbLine.style.background='transparent'; });
+    sbHandle.addEventListener('mousedown',function(e){
+      var sbEl=document.getElementById('main-sidebar');
+      _sbDragging=true;
+      _sbStartX=e.clientX;
+      _sbStartW=sbEl?sbEl.offsetWidth:SB_WIDTH;
+      sbLine.style.background='var(--accent)';
+      document.body.style.cursor='col-resize';
+      document.body.style.userSelect='none';
+      e.preventDefault();
+    });
+  }
+
+  // Apply saved sidebar width on load
+  (function(){
+    var sbEl=document.getElementById('main-sidebar');
+    if(sbEl&&SB_WIDTH!==SB_WIDTH_DEFAULT) sbEl.style.width=SB_WIDTH+'px';
+  })();
 });
 
 function downloadContractFile(ver){
