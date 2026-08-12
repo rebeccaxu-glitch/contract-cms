@@ -4316,30 +4316,92 @@ function importSelected(){
 function _isTemplateName(name){
   return /^template[\s_\-]/i.test(name||'');
 }
+
+// Strip common legal suffixes/admin prefixes to get the core brand identifier
+function _entityCoreWords(name){
+  return name
+    .replace(/有限公司|股份有限公司|实验科技|实验室|有限|Pte\.?\s*Ltd\.?|Ltd\.?|Inc\.?|Corp\.?|Co\.?|Services?|Aust(?:ralia)?/gi,'')
+    .replace(/深圳市|北京市|上海市|广州市|台灣|台湾/g,'')
+    .replace(/[\s　\-_·.。（）()]+/g,'')
+    .toLowerCase()
+    .trim();
+}
+
+// Migrate files from unlinked folders (e.g. "Drive Templates") to correct entity folders
+function migrateDriveTemplateFiles(){
+  var unlinked = T.filter(function(f){ return !f.entityRef && f.files.length > 0; });
+  if(!unlinked.length) return false;
+  var changed = false;
+
+  unlinked.forEach(function(df){
+    var stillHere = [];
+    df.files.forEach(function(tf){
+      var raw = (tf.name || tf.driveFileName || '').replace(/\.(pdf|docx?|xlsx?)$/i,'').replace(/^template[\s_\-]*/i,'').trim();
+      var norm = raw.toLowerCase().replace(/[\s　\-_·.。（）()_]/g,'');
+      var matched = false;
+
+      for(var i=0; i<BRANDS.length && !matched; i++){
+        var b = BRANDS[i];
+        for(var j=0; j<b.entities.length && !matched; j++){
+          var ent = b.entities[j];
+          var enCore = _entityCoreWords(ent.name);
+          var enFull = ent.name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
+          var bnCore = _entityCoreWords(b.name);
+          // Match: core entity name in filename, OR core brand name in filename, OR original full name rules
+          var hits = (enCore.length >= 2 && norm.indexOf(enCore) > -1) ||
+                     (bnCore.length >= 3 && norm.indexOf(bnCore) > -1) ||
+                     (enFull.length >= 2 && (norm.indexOf(enFull) > -1 || enFull.indexOf(norm.slice(0,6)) > -1));
+          if(hits){
+            var eRef = b.key + '::' + ent.name;
+            var dest = T.find(function(f){ return f.entityRef === eRef; });
+            if(!dest){
+              dest = {id:++M.nextFId, name:ent.name, entityRef:eRef, icon:'📁', desc:'', files:[]};
+              T.push(dest);
+            }
+            if(!dest.files.find(function(x){ return x.id === tf.id || (x.driveFileId && x.driveFileId === tf.driveFileId); })){
+              dest.files.push(tf);
+              changed = true;
+              console.log('Template migrated: "'+tf.name+'" → '+eRef);
+            }
+            matched = true;
+          }
+        }
+      }
+      if(!matched) stillHere.push(tf);
+    });
+    df.files = stillHere;
+  });
+
+  // Remove empty unlinked folders
+  T = T.filter(function(f){ return f.entityRef || f.files.length > 0; });
+
+  if(changed){
+    save(SK.T, T); save(SK.M, M);
+    if(fbReady && fbDb){
+      fbDb.collection('cms').doc('templates').set({ data: T });
+      fbDb.collection('cms').doc('meta').set({ data: M });
+    }
+    renderTplList();
+  }
+  return changed;
+}
 function _importDriveTemplate(file){
   // Strip "Template " prefix and extension for display name
   var rawName = (file.name||'').replace(/\.(pdf|docx?|xlsx?)$/i,'');
   var cleanName = rawName.replace(/^template[\s_\-]*/i,'').trim();
-  // Try to match entity from BRANDS by keyword in name
-  // First try brand name (shorter, more likely to appear in filename),
-  // then fall back to individual entity names.
+  // Try to match entity from BRANDS using core-word matching (strips legal suffixes)
   var entityRef = null;
-  var normClean = cleanName.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
+  var normClean = cleanName.toLowerCase().replace(/[\s　\-_·.。（）()_]/g,'');
   for(var i=0;i<BRANDS.length&&!entityRef;i++){
     var b=BRANDS[i];
-    // Try brand name first
-    var bn=b.name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
-    if(bn.length>=2&&normClean.indexOf(bn)>-1&&b.entities.length>0){
-      entityRef=b.key+'::'+b.entities[0].name;
-    }
-    // Then try each entity name
-    if(!entityRef){
-      for(var j=0;j<b.entities.length&&!entityRef;j++){
-        var en=b.entities[j].name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
-        if(en.length>=2&&(normClean.indexOf(en)>-1||en.indexOf(normClean.slice(0,6))>-1)){
-          entityRef=b.key+'::'+b.entities[j].name;
-        }
-      }
+    var bnCore=_entityCoreWords(b.name);
+    for(var j=0;j<b.entities.length&&!entityRef;j++){
+      var enCore=_entityCoreWords(b.entities[j].name);
+      var enFull=b.entities[j].name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
+      var hits=(enCore.length>=2&&normClean.indexOf(enCore)>-1)||
+               (bnCore.length>=3&&normClean.indexOf(bnCore)>-1)||
+               (enFull.length>=2&&(normClean.indexOf(enFull)>-1||enFull.indexOf(normClean.slice(0,6))>-1));
+      if(hits) entityRef=b.key+'::'+b.entities[j].name;
     }
   }
   // Find or create template folder for this entity
@@ -5415,7 +5477,7 @@ function startApp(){
   // Load from localStorage first (instant display)
   C=load(SK.C,[]);E=load(SK.E,DEF_E);T=load(SK.T,DEF_T);TL=loadTl();
   M=load(SK.M,{nextGId:10,nextEId:20,nextCId:30,nextFId:10,nextTId:20});
-  migrateTplFolders();
+  migrateTplFolders(); migrateDriveTemplateFiles();
   setView('all');
   renderDashboard();renderGroupList();renderTplList();updateNavCounts();
   // Then load from Firebase (authoritative source)
@@ -5425,7 +5487,7 @@ function startApp(){
     try{ localStorage.setItem(SK.T, JSON.stringify(T)); }catch(e){}
     try{ localStorage.setItem(SK.M, JSON.stringify(M)); }catch(e){}
     _suppressFbSync = false;
-    migrateTplFolders();
+    migrateTplFolders(); migrateDriveTemplateFiles();
     renderDashboard();renderContracts();renderGroupList();renderTplList();updateNavCounts();
     console.log('Rendered with Firebase data');
   }).catch(function(e){
