@@ -1107,6 +1107,21 @@ var histOpen    = false;
 var upIsFinal   = false;
 var selGrpIcon  = '🏛';
 var selCatIcon  = '📋';
+
+// ── Resizable columns ──────────────────────────────────────────────
+var COL_WIDTHS_DEFAULT=[190,130,145,120,88,88,110,65,95,130];
+var COL_WIDTHS=(function(){
+  try{var s=localStorage.getItem('cms_col_widths');if(s){var a=JSON.parse(s);if(Array.isArray(a)&&a.length===10)return a;}}catch(e){}
+  return COL_WIDTHS_DEFAULT.slice();
+})();
+function getColGrid(){return COL_WIDTHS.map(function(w){return w+'px';}).join(' ');}
+function _applyColWidths(){
+  var g=getColGrid();
+  document.querySelectorAll('.contract-row,.col-header-row').forEach(function(el){
+    el.style.gridTemplateColumns=g;
+  });
+}
+var _rzDragging=false,_rzColIdx=-1,_rzStartX=0,_rzStartW=0,_rzActiveLine=null;
 var selTplIcon  = '📁';
 
 var GRP_ICONS = ['🏛','🏢','🌏','🏗','💼','🚀','⚖','🔐','🌐','💰','🤝','🏭'];
@@ -1892,7 +1907,6 @@ function renderContracts(){
   var brandNames={};
   BRANDS.forEach(function(b){brandNames[b.key]=b.name;});
 
-  var COL_GRID='minmax(130px,220px) minmax(100px,160px) minmax(110px,180px) minmax(90px,150px) 88px 88px 110px 65px 95px 130px';
   var COL_LABELS=['Name (File)','Entity','Counterparty','Contract Type','Start Date','End Date','Value / Fees','Renew','Notice','Actions'];
   var AI_COLS=[3,6,8];
 
@@ -1911,7 +1925,7 @@ function renderContracts(){
 
     var row=document.createElement('div');
     row.className='contract-row';
-    row.style.cssText='display:grid;grid-template-columns:'+COL_GRID+';gap:6px;padding:9px 16px;border-top:1px solid var(--border);align-items:center;font-size:12px;cursor:pointer;';
+    row.style.cssText='display:grid;grid-template-columns:'+getColGrid()+';gap:6px;padding:9px 16px;border-top:1px solid var(--border);align-items:center;font-size:12px;cursor:pointer;';
     row.onclick=function(){openContractDetail(c.id);};
 
     var c1=document.createElement('div');
@@ -2007,11 +2021,33 @@ function renderContracts(){
   // Helper: build column header row
   function buildColHeader(paddingLeft){
     var colHdr=document.createElement('div');
-    colHdr.style.cssText='display:grid;grid-template-columns:'+COL_GRID+';gap:6px;padding:5px '+(paddingLeft||'16px')+';background:var(--surface2);align-items:center;';
+    colHdr.className='col-header-row';
+    colHdr.style.cssText='display:grid;grid-template-columns:'+getColGrid()+';gap:6px;padding:5px '+(paddingLeft||'16px')+';background:var(--surface2);align-items:center;';
     COL_LABELS.forEach(function(lbl,i){
       var ch=document.createElement('div');
-      ch.innerHTML='<span style="font-size:10px;font-weight:600;color:var(--text3);">'+lbl+'</span>'+(AI_COLS.indexOf(i)!==-1?'<span class="ai-badge-sm">AI</span>':'');
-      if(i===9)ch.style.textAlign='right';
+      ch.style.cssText='position:relative;display:flex;align-items:center;gap:4px;overflow:hidden;'+(i===9?'justify-content:flex-end;':'');
+      var lblSp=document.createElement('span');
+      lblSp.style.cssText='font-size:10px;font-weight:600;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      lblSp.textContent=lbl;
+      ch.appendChild(lblSp);
+      if(AI_COLS.indexOf(i)!==-1){var ai=document.createElement('span');ai.className='ai-badge-sm';ai.textContent='AI';ch.appendChild(ai);}
+      // Resizer handle (not on last column)
+      if(i<COL_LABELS.length-1){
+        var rz=document.createElement('div');
+        rz.style.cssText='position:absolute;right:-4px;top:0;width:10px;height:100%;cursor:col-resize;z-index:10;display:flex;align-items:center;justify-content:center;';
+        var rzL=document.createElement('div');
+        rzL.style.cssText='width:2px;height:55%;border-radius:1px;background:transparent;pointer-events:none;transition:background .12s;';
+        rz.appendChild(rzL);
+        rz.addEventListener('mouseenter',function(){if(!_rzDragging)rzL.style.background='var(--accent)';});
+        rz.addEventListener('mouseleave',function(){if(!_rzDragging)rzL.style.background='transparent';});
+        rz.addEventListener('mousedown',(function(ci,line){return function(e){
+          _rzDragging=true;_rzColIdx=ci;_rzStartX=e.clientX;_rzStartW=COL_WIDTHS[ci];_rzActiveLine=line;
+          line.style.background='var(--accent)';
+          document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+          e.preventDefault();e.stopPropagation();
+        };})(i,rzL));
+        ch.appendChild(rz);
+      }
       colHdr.appendChild(ch);
     });
     return colHdr;
@@ -3488,6 +3524,22 @@ function fpmDownload() {
 document.addEventListener('DOMContentLoaded', function(){
   var modal = document.getElementById('file-preview-modal');
   if (modal) modal.addEventListener('click', function(e){ if(e.target===modal) closeFpm(); });
+
+  // Column resize drag handlers
+  document.addEventListener('mousemove', function(e){
+    if(!_rzDragging) return;
+    var diff = e.clientX - _rzStartX;
+    COL_WIDTHS[_rzColIdx] = Math.max(50, _rzStartW + diff);
+    _applyColWidths();
+  });
+  document.addEventListener('mouseup', function(){
+    if(!_rzDragging) return;
+    _rzDragging = false;
+    if(_rzActiveLine){ _rzActiveLine.style.background='transparent'; _rzActiveLine=null; }
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    try{ localStorage.setItem('cms_col_widths', JSON.stringify(COL_WIDTHS)); }catch(e){}
+  });
 });
 
 function downloadContractFile(ver){
