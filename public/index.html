@@ -3091,6 +3091,21 @@ function renderTplBrandTree(){
     el.appendChild(bRow);el.appendChild(entWrap);
   });
 
+  // Show unlinked template folders (e.g. "Drive Templates") at bottom of tree
+  T.forEach(function(uf){
+    if(uf.entityRef || !uf.files.length) return;
+    var uRow=document.createElement('div');
+    uRow.className='brand-row';
+    uRow.style.cssText='cursor:pointer;opacity:0.75;';
+    var dot=mk('span','brand-dot','');dot.style.background='var(--text3)';
+    var lbl=mk('span','',uf.name);
+    lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;color:var(--text2);';
+    var cnt=mk('span','brand-cnt',''+uf.files.length);
+    uRow.appendChild(dot);uRow.appendChild(lbl);uRow.appendChild(cnt);
+    uRow.onclick=(function(f){return function(){showTplDetail(f);};})(uf);
+    el.appendChild(uRow);
+  });
+
   // Add brand button
   var addBrandBtn=document.createElement('div');
   addBrandBtn.style.cssText='padding:6px 12px 4px 12px;cursor:pointer;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:3px;margin-top:2px;';
@@ -4306,14 +4321,24 @@ function _importDriveTemplate(file){
   var rawName = (file.name||'').replace(/\.(pdf|docx?|xlsx?)$/i,'');
   var cleanName = rawName.replace(/^template[\s_\-]*/i,'').trim();
   // Try to match entity from BRANDS by keyword in name
+  // First try brand name (shorter, more likely to appear in filename),
+  // then fall back to individual entity names.
   var entityRef = null;
   var normClean = cleanName.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
   for(var i=0;i<BRANDS.length&&!entityRef;i++){
     var b=BRANDS[i];
-    for(var j=0;j<b.entities.length&&!entityRef;j++){
-      var en=b.entities[j].name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
-      if(en.length>=2&&(normClean.indexOf(en)>-1||en.indexOf(normClean.slice(0,6))>-1)){
-        entityRef=b.key+'::'+b.entities[j].name;
+    // Try brand name first
+    var bn=b.name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
+    if(bn.length>=2&&normClean.indexOf(bn)>-1&&b.entities.length>0){
+      entityRef=b.key+'::'+b.entities[0].name;
+    }
+    // Then try each entity name
+    if(!entityRef){
+      for(var j=0;j<b.entities.length&&!entityRef;j++){
+        var en=b.entities[j].name.toLowerCase().replace(/[\s　\-_·.。（）()]/g,'');
+        if(en.length>=2&&(normClean.indexOf(en)>-1||en.indexOf(normClean.slice(0,6))>-1)){
+          entityRef=b.key+'::'+b.entities[j].name;
+        }
       }
     }
   }
