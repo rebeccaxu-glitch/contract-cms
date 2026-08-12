@@ -288,7 +288,11 @@ textarea.form-input{resize:vertical;}
 <div class="main">
   <div class="topbar">
     <div class="topbar-title" id="pageTitle">控制台</div><div id="sync-status" style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;margin-left:8px"></div>
-    <div class="search-box"><span style="color:var(--text3)">🔍</span><input type="text" id="searchInput" placeholder="搜索合同名称、对方当事人…"></div>
+    <div class="search-box" style="position:relative;">
+      <span style="color:var(--text3)">🔍</span>
+      <input type="text" id="searchInput" placeholder="名称 / 对方 / entity:星鹰 / type:NDA / status:active…" style="flex:1;">
+      <span id="search-clear" style="display:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 4px;" title="清空 (ESC)">✕</span>
+    </div>
     <div class="topbar-right">
       <button class="btn btn-ghost" onclick="openDriveImport()" title="Import contracts from Google Drive">📂 Drive Import</button>
       <button class="btn btn-ghost" onclick="openDedupModal()" title="AI 识别重复/版本合同">🔍 查重</button>
@@ -1082,6 +1086,7 @@ var ALERT_RULES=(function(){var s=load(SK.RULES);return(s&&s.length)?s:JSON.pars
 var C, E, T, M;
 var curFilter       = 'all';
 var curView         = 'all';      // 'all' | 'external' | 'intercompany'
+var curSearch       = '';         // current search query
 var curBrandFilter  = null;
 var curEntityFilter = null;
 var curIcType       = null;       // selected IC agreement type key
@@ -1871,6 +1876,8 @@ function renderContracts(){
   // Apply view filter first
   // Hide version children — they are grouped under their parent in the list
   var filtered=base.filter(function(c){ return !c.isVersion; });
+  // Apply search filter
+  if(curSearch) filtered=filtered.filter(function(c){ return _matchesSearch(c, curSearch); });
   if(curView==='external')filtered=filtered.filter(function(c){return!isIntercompanyContract(c);});
   if(curView==='intercompany')filtered=filtered.filter(function(c){return isIntercompanyContract(c);});
 
@@ -1934,7 +1941,8 @@ function renderContracts(){
     var fileIconSp=document.createElement('span');
     fileIconSp.textContent=hasFile?'📄 ':'📋 ';
     fileIconSp.style.cssText='font-size:11px;'+(hasFile?'color:var(--accent);':'color:var(--text3);');
-    var nmSp=document.createElement('span');nmSp.textContent=c.name;nmSp.style.cssText='font-weight:600;color:var(--text);';
+    var nmSp=document.createElement('span');nmSp.style.cssText='font-weight:600;color:var(--text);';
+    if(curSearch){nmSp.innerHTML=_hlText(c.name,curSearch);}else{nmSp.textContent=c.name;}
     var cidDiv=mk('div','cid',c.id);cidDiv.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;';
     c1.appendChild(fileIconSp);c1.appendChild(nmSp);c1.appendChild(cidDiv);
     // "Versions" badge — show grouped children
@@ -2003,10 +2011,13 @@ function renderContracts(){
     if(c.entity){var entSpan=mk('span','',c.entity);entSpan.style.cssText='color:var(--text2);font-size:11px;';cEnt.appendChild(entSpan);}
     else{cEnt.textContent='—';cEnt.style.color='var(--border)';}
 
-    var c2=document.createElement('div');c2.textContent=_party||'—';c2.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    var c2=document.createElement('div');c2.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    if(curSearch&&_party){c2.innerHTML=_hlText(_party,curSearch);}else{c2.textContent=_party||'—';}
 
     var c3=document.createElement('div');c3.style.cssText='display:flex;align-items:center;gap:3px;';
-    var typeSpan=mk('span','',(c.type||c.contractType||'—'));typeSpan.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
+    var _typeTxt=c.type||c.contractType||'—';
+    var typeSpan=document.createElement('span');typeSpan.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;';
+    if(curSearch){typeSpan.innerHTML=_hlText(_typeTxt,curSearch);}else{typeSpan.textContent=_typeTxt;}
     var typeEdit=mk('span','inline-edit-btn','✎');
     typeEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'type',id);};})(c.id);
     c3.appendChild(typeSpan);c3.appendChild(typeEdit);
@@ -5341,18 +5352,81 @@ function exportExcel(){
   XLSX.writeFile(wb,'合同管理备份_'+ds+'.xlsx');
 }
 
+// ── Search helpers ───────────────────────────────────────
+// Escape HTML for safe innerHTML insertion
+function _escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Highlight search terms inside text (returns HTML string)
+function _hlText(text, q){
+  var esc=_escHtml(text);
+  if(!q||!esc) return esc;
+  var terms=q.toLowerCase().split(/\s+/).filter(function(t){ return t&&!t.includes(':'); });
+  terms.forEach(function(term){
+    var re=new RegExp('('+_escHtml(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+    esc=esc.replace(re,'<mark style="background:#fff176;color:inherit;border-radius:2px;padding:0 1px;">$1</mark>');
+  });
+  return esc;
+}
+
+// Multi-keyword + field-prefix search
+// Supports: "entity:星鹰", "type:NDA", "party:腾讯", "status:active", "id:20240101"
+// Multiple words = AND logic
+function _matchesSearch(c, rawQ){
+  if(!rawQ) return true;
+  var terms=rawQ.toLowerCase().split(/\s+/).filter(Boolean);
+  return terms.every(function(term){
+    var m=term.match(/^(entity|type|party|status|brand|id|notes?|value|fees?):(.+)/);
+    if(m){
+      var field=m[1],val=m[2];
+      if(field==='entity') return (c.entity||'').toLowerCase().includes(val);
+      if(field==='type')   return (c.type||c.contractType||'').toLowerCase().includes(val);
+      if(field==='party')  return (c.party||c.counterparty||'').toLowerCase().includes(val);
+      if(field==='status') return getComputedStatus(c).toLowerCase().includes(val);
+      if(field==='brand')  return (c.brand||'').toLowerCase().includes(val);
+      if(field==='id')     return (c.id||'').toLowerCase().includes(val);
+      if(field==='notes'||field==='note') return (c.notes||c.note||'').toLowerCase().includes(val);
+      if(field==='value'||field==='fees'||field==='fee') return (c.fees||c.value||c.amount||'').toString().toLowerCase().includes(val);
+    }
+    // General: match any field
+    var haystack=[
+      c.name, c.party, c.counterparty, c.entity, c.type, c.contractType,
+      c.id, c.brand, c.notes, c.note,
+      c.fees||c.value||c.amount||'',
+      c.start||c.startDate||'', c.end||c.endDate||''
+    ].filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(term);
+  });
+}
+
 // ── Search ──────────────────────────────────────────────
+function _clearSearch(){
+  var inp=q('searchInput');
+  if(inp){inp.value='';inp.focus();}
+  curSearch='';
+  var clr=q('search-clear');if(clr)clr.style.display='none';
+  renderContracts();
+}
 q('searchInput').addEventListener('input',function(){
-  var qv=this.value.trim().toLowerCase();
-  if(!qv){renderContracts();return;}
+  curSearch=this.value.trim().toLowerCase();
+  var clr=q('search-clear');if(clr)clr.style.display=curSearch?'inline':'none';
   navTo('contracts');
+  renderContracts();
+});
+q('searchInput').addEventListener('keydown',function(e){
+  if(e.key==='Escape') _clearSearch();
+});
+var _clrBtn=q('search-clear');
+if(_clrBtn) _clrBtn.addEventListener('click',function(){ _clearSearch(); });
+
+// Legacy block retained for reference only — replaced by renderContracts filter above
+if(false){
   var f=C.filter(function(c){
     var party=(c.party||c.counterparty||'').toLowerCase();
-    return (c.name||'').toLowerCase().includes(qv)
-        || party.includes(qv)
-        || (c.id||'').toLowerCase().includes(qv)
-        || (c.entity||'').toLowerCase().includes(qv)
-        || (c.type||'').toLowerCase().includes(qv);
+    return (c.name||'').toLowerCase().includes('')
+        || party.includes('')
+        || (c.id||'').toLowerCase().includes('')
+        || (c.entity||'').toLowerCase().includes('')
+        || (c.type||'').toLowerCase().includes('');
   });
   var listEl=q('contracts-list');var empty=q('contracts-empty');
   if(!f.length){listEl.innerHTML='';empty.style.display='block';return;}
@@ -5427,7 +5501,7 @@ q('searchInput').addEventListener('input',function(){
     resultCard.appendChild(row);
   });
   listEl.appendChild(resultCard);
-});
+} // end if(false) — old search card code, replaced by renderContracts filter
 
 // ── Nav & filter event listeners ────────────────────────
 document.querySelectorAll('.nav-item').forEach(function(el){
