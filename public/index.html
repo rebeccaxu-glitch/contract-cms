@@ -4553,9 +4553,10 @@ function _runDriveScanWithFiles(files){
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+e+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
         +'</div>'
         + detailHtml;
-      if(a + rv > 0){
+      // Always reload from Firestore after any import (even all-skipped) so client stays in sync
+      if(a + rv > 0 || sk > 0){
         fbLoadAll().then(function(){
-          // Reset all filters so newly imported contracts are visible
+          // Reset all filters so contracts are visible
           curView='all'; curFilter='all'; curBrandFilter=null; curEntityFilter=null;
           curIcType=null; curIcEntity=null; curIcCp=null;
           renderDashboard(); renderContracts(); updateNavCounts(); _refreshSidebarActive();
