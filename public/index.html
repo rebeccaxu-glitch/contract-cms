@@ -291,6 +291,7 @@ textarea.form-input{resize:vertical;}
     <div class="search-box"><span style="color:var(--text3)">🔍</span><input type="text" id="searchInput" placeholder="搜索合同名称、对方当事人…"></div>
     <div class="topbar-right">
       <button class="btn btn-ghost" onclick="openDriveImport()" title="Import contracts from Google Drive">📂 Drive Import</button>
+      <button class="btn btn-ghost" onclick="openDedupModal()" title="AI 识别重复/版本合同">🔍 查重</button>
       <button class="btn btn-ghost" onclick="exportJSON()" title="Export full data backup (JSON)">📤 Export</button>
       <button class="btn btn-ghost" onclick="document.getElementById('importJSONInput').click()" title="Restore from JSON backup">📥 Import</button>
       <input type="file" id="importJSONInput" accept=".json" style="display:none" onchange="importJSON(this)">
@@ -4634,6 +4635,199 @@ function runMigrateIds(){
   });
 }
 
+// ══════════════════════════════════════════════════════════
+//  查重功能 — openDedupModal / runDedupScan / renderDedupGroups / doMerge
+// ══════════════════════════════════════════════════════════
+function openDedupModal(){
+  openModal('modal-dedup');
+  // Reset to fresh state each open
+  q('dedup-status').textContent = '';
+  q('dedup-progress').style.display = 'none';
+  q('dedup-bar').style.width = '0%';
+  q('dedup-groups').style.display = 'none';
+  q('dedup-groups').innerHTML = '';
+  q('dedup-empty').style.display = 'none';
+  q('dedup-scan-btn').disabled = false;
+  q('dedup-scan-btn').textContent = '🤖 开始扫描';
+}
+
+function runDedupScan(){
+  var btn = q('dedup-scan-btn');
+  var statusEl = q('dedup-status');
+  var progressEl = q('dedup-progress');
+  var bar = q('dedup-bar');
+  var groupsEl = q('dedup-groups');
+  var emptyEl = q('dedup-empty');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 扫描中…';
+  statusEl.textContent = '正在读取合同并调用 AI 分析，请稍候…';
+  progressEl.style.display = 'block';
+  groupsEl.style.display = 'none';
+  groupsEl.innerHTML = '';
+  emptyEl.style.display = 'none';
+
+  // Animate bar (indeterminate-style)
+  var pct = 0;
+  var fakeTimer = setInterval(function(){
+    pct = Math.min(pct + 4, 88);
+    bar.style.width = pct + '%';
+  }, 600);
+
+  fetch('/api/find-duplicates', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      clearInterval(fakeTimer);
+      bar.style.width = '100%';
+      btn.disabled = false;
+      btn.textContent = '🔄 重新扫描';
+
+      if(!d.ok) throw new Error(d.error || 'Unknown error');
+      var groups = d.groups || [];
+
+      if(!groups.length){
+        statusEl.textContent = '扫描完成，未发现重复合同。';
+        emptyEl.style.display = 'block';
+        return;
+      }
+      statusEl.textContent = '发现 ' + groups.length + ' 组可能重复/版本合同，请逐一确认：';
+      renderDedupGroups(groups);
+    })
+    .catch(function(e){
+      clearInterval(fakeTimer);
+      bar.style.width = '0%';
+      progressEl.style.display = 'none';
+      btn.disabled = false;
+      btn.textContent = '🤖 重新扫描';
+      statusEl.textContent = '❌ 扫描失败：' + e.message;
+    });
+}
+
+function renderDedupGroups(groups){
+  var el = q('dedup-groups');
+  el.innerHTML = '';
+  el.style.display = 'block';
+
+  var relLabels = {
+    '草稿与签署版':'📝 草稿 → 签署版',
+    '补充协议':'📎 补充协议',
+    '续约':'🔄 续约',
+    '重复录入':'⚠️ 重复录入',
+    '独立合同':'📄 相关合同'
+  };
+
+  groups.forEach(function(g, gi){
+    var card = document.createElement('div');
+    card.id = 'dedup-group-' + gi;
+    card.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;background:var(--surface2);';
+
+    // Header: confidence + relationship
+    var relLabel = relLabels[g.relationship] || g.relationship || '相关';
+    var confColor = g.confidence >= 85 ? 'var(--green)' : g.confidence >= 70 ? 'var(--accent)' : 'var(--yellow)';
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+    hdr.innerHTML = '<span style="font-size:13px;font-weight:600;color:var(--text);">' + relLabel + '</span>' +
+      '<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:' + confColor + '20;color:' + confColor + ';font-weight:600;">AI 置信度 ' + g.confidence + '%</span>';
+    card.appendChild(hdr);
+
+    // Reason
+    if(g.reason){
+      var reasonEl = document.createElement('div');
+      reasonEl.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5;';
+      reasonEl.textContent = 'AI 说明：' + g.reason;
+      card.appendChild(reasonEl);
+    }
+
+    // Contract list with radio for "main"
+    var listEl = document.createElement('div');
+    listEl.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-bottom:12px;';
+    g.contracts.forEach(function(c, ci){
+      var row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;background:var(--surface);cursor:pointer;font-size:12px;';
+      var radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'dedup-main-' + gi;
+      radio.value = c.id;
+      radio.checked = (ci === 0);
+      radio.style.accentColor = 'var(--accent)';
+      var info = '<span style="flex:1;min-width:0;">' +
+        '<span style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + (c.name || '(无名称)') + '</span>' +
+        '<span style="color:var(--text3);">' + [c.entity, c.counterparty, c.start, c.status ? ('状态:' + c.status) : '', c.value ? ('金额:' + c.value) : ''].filter(Boolean).join(' · ') + '</span>' +
+        '</span>';
+      row.appendChild(radio);
+      row.insertAdjacentHTML('beforeend', info);
+      listEl.appendChild(row);
+    });
+    card.appendChild(listEl);
+
+    // Action buttons
+    var foot = document.createElement('div');
+    foot.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+    var allIds = g.contracts.map(function(c){ return c.id; });
+    var skipBtn = document.createElement('button');
+    skipBtn.className = 'btn btn-ghost';
+    skipBtn.style.fontSize = '12px';
+    skipBtn.textContent = '跳过此组';
+    skipBtn.onclick = (function(cardId){ return function(){
+      var el2 = document.getElementById(cardId);
+      if(el2){ el2.style.opacity='0.4'; el2.style.pointerEvents='none'; }
+    }; })('dedup-group-' + gi);
+
+    var mergeBtn = document.createElement('button');
+    mergeBtn.className = 'btn btn-primary';
+    mergeBtn.style.fontSize = '12px';
+    mergeBtn.textContent = '✅ 合并';
+    mergeBtn.onclick = (function(cardId, ids, mergeB){ return function(){
+      var radios = document.querySelectorAll('input[name="dedup-main-' + cardId.split('-').pop() + '"]');
+      var mainId = null;
+      radios.forEach(function(r){ if(r.checked) mainId = r.value; });
+      if(!mainId) return;
+      var subIds = ids.filter(function(id){ return id !== mainId; });
+      doMerge(mainId, subIds, cardId, mergeB);
+    }; })('dedup-group-' + gi, allIds, mergeBtn);
+
+    foot.appendChild(skipBtn);
+    foot.appendChild(mergeBtn);
+    card.appendChild(foot);
+    el.appendChild(card);
+  });
+}
+
+function doMerge(mainId, subIds, cardId, mergeBtn){
+  mergeBtn.disabled = true;
+  mergeBtn.textContent = '⏳ 合并中…';
+  fetch('/api/merge-contracts', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ mainId: mainId, subIds: subIds })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(!d.ok) throw new Error(d.error || 'merge failed');
+    var card = document.getElementById(cardId);
+    if(card){
+      card.style.border = '1.5px solid var(--green)';
+      card.style.opacity = '0.6';
+      card.style.pointerEvents = 'none';
+      var ok = document.createElement('div');
+      ok.style.cssText = 'text-align:center;color:var(--green);font-size:13px;font-weight:600;padding:6px 0;';
+      ok.textContent = '✅ 已合并，删除 ' + subIds.length + ' 个重复合同';
+      card.appendChild(ok);
+    }
+    // Reload contracts from Firestore
+    if(fbReady && fbDb){
+      fbLoadAll().then(function(){
+        renderContracts(); updateNavCounts(); _refreshSidebarActive();
+      }).catch(function(){ location.reload(); });
+    }
+  })
+  .catch(function(e){
+    mergeBtn.disabled = false;
+    mergeBtn.textContent = '✅ 合并';
+    alert('合并失败：' + e.message);
+  });
+}
+
 function openDriveImport(){
   openModal('modal-drive-import');
   // Load last scan status
@@ -5649,6 +5843,39 @@ function startApp(){
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:16px;">
       <button class="btn btn-ghost" onclick="closeModal('modal-drive-import')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- 查重 Modal -->
+<div id="modal-dedup" class="overlay">
+  <div class="modal" style="max-width:640px;width:95%;max-height:90vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <div class="modal-title">🔍 合同查重 · AI 版本识别</div>
+      <button class="modal-close" onclick="closeModal('modal-dedup')">×</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5;">
+      AI 会分析所有合同，找出属于同一底层协议的多个版本（草稿/签署版/补充协议/续约等），由你确认后合并。合并后子合同变为主合同的版本记录，不会丢失数据。
+    </div>
+    <!-- 扫描按钮 + 状态 -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <button class="btn btn-primary" onclick="runDedupScan()" id="dedup-scan-btn" style="font-size:13px;padding:8px 18px;">🤖 开始扫描</button>
+      <div id="dedup-status" style="font-size:12px;color:var(--text3);"></div>
+    </div>
+    <!-- 进度条 -->
+    <div id="dedup-progress" style="display:none;margin-bottom:14px;">
+      <div style="background:var(--border);border-radius:10px;height:5px;">
+        <div id="dedup-bar" style="background:var(--accent);border-radius:10px;height:5px;width:0%;transition:width .6s;"></div>
+      </div>
+    </div>
+    <!-- 结果列表 -->
+    <div id="dedup-groups" style="flex:1;overflow-y:auto;display:none;"></div>
+    <!-- 空状态 -->
+    <div id="dedup-empty" style="text-align:center;padding:32px 0;color:var(--text3);font-size:13px;display:none;">
+      ✅ 未发现重复或版本关系的合同
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-dedup')">关闭</button>
     </div>
   </div>
 </div>

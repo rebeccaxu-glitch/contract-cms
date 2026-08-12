@@ -1034,6 +1034,136 @@ app.get('/api/migrate-ids', async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════
+//  API：合同查重 & 合并
+// ══════════════════════════════════════════════════════════
+
+// POST /api/find-duplicates — 用 AI 分析所有合同，找出可能是同一协议的多个版本
+app.post('/api/find-duplicates', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Firebase unavailable' });
+  try {
+    const contractsDoc = await db.collection('cms').doc('contracts').get();
+    const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
+
+    // Normalise a string for fuzzy key matching (strip legal suffixes, punctuation)
+    function norm(s) {
+      return (s || '').toLowerCase()
+        .replace(/co\.?\s*ltd\.?|pte\.?\s*ltd\.?|limited|有限公司|股份有限公司|inc\.?|corp\.?|llc\.?/gi, '')
+        .replace(/[\s\-_,\.（）()&＆、·]/g, '');
+    }
+
+    // Group contracts by normalised (counterparty + entity + type)
+    const groups = {};
+    contracts.forEach(c => {
+      const cp = norm(c.party || c.counterparty);
+      if (!cp || cp.length < 2) return;
+      const key = `${cp}|${norm(c.entity||'')}|${norm(c.type||'')}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    });
+
+    const candidates = Object.values(groups).filter(g => g.length >= 2);
+    if (!candidates.length) return res.json({ ok: true, groups: [] });
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+    const results = [];
+    for (const group of candidates) {
+      const summaries = group.map((c, i) =>
+        `合同${i+1}: 名称="${c.name}" | 类型=${c.type||'?'} | 主体=${c.entity||'?'} | 对方=${c.party||c.counterparty||'?'} | 开始=${c.start||c.startDate||'?'} | 结束=${c.end||c.endDate||'?'} | 金额=${c.value||'?'} | 状态=${c.status||'?'}`
+      ).join('\n');
+
+      const body = JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 350,
+        messages: [{
+          role: 'user',
+          content: `以下${group.length}份合同是否属于同一底层协议的不同版本（草稿/签署版/补充协议/续约/重复录入等）？\n\n${summaries}\n\n只返回JSON（不要任何其他文字）：{"same_agreement":true或false,"confidence":0到100的整数,"reason":"中文简短理由","relationship":"草稿与签署版"或"补充协议"或"续约"或"重复录入"或"独立合同"}`
+        }]
+      });
+
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
+          body
+        });
+        const data = await resp.json();
+        const text = (data.content && data.content[0] && data.content[0].text) || '';
+        const m = text.match(/\{[\s\S]*\}/);
+        if (m) {
+          const parsed = JSON.parse(m[0]);
+          if (parsed.same_agreement && parsed.confidence >= 65) {
+            results.push({
+              contracts: group.map(c => ({
+                id: c.id, name: c.name,
+                counterparty: c.party || c.counterparty,
+                entity: c.entity, type: c.type,
+                start: c.start || c.startDate,
+                status: c.status, value: c.value
+              })),
+              confidence: parsed.confidence,
+              reason: parsed.reason,
+              relationship: parsed.relationship
+            });
+          }
+        }
+      } catch(e) { console.warn('Dedup Claude call failed:', e.message); }
+    }
+
+    res.json({ ok: true, groups: results });
+  } catch(e) {
+    console.error('find-duplicates error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/merge-contracts — 把多个合同合并为一个（保留主合同，其余变为版本）
+app.post('/api/merge-contracts', async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Firebase unavailable' });
+  const { mainId, subIds } = req.body || {};
+  if (!mainId || !Array.isArray(subIds) || !subIds.length)
+    return res.status(400).json({ error: 'mainId and subIds required' });
+  try {
+    const contractsDoc = await db.collection('cms').doc('contracts').get();
+    const contracts = contractsDoc.exists ? (contractsDoc.data().data || []) : [];
+    const main = contracts.find(c => c.id === mainId);
+    if (!main) return res.status(404).json({ error: 'Main contract not found' });
+
+    if (!main.versions) main.versions = [];
+    const toRemove = new Set(subIds);
+
+    subIds.forEach(subId => {
+      const sub = contracts.find(c => c.id === subId);
+      if (!sub) return;
+      // Absorb sub's existing versions
+      (sub.versions || []).forEach(v => {
+        if (!main.versions.some(mv => mv.driveFileId && mv.driveFileId === v.driveFileId))
+          main.versions.push({ ...v, mergedFromId: sub.id });
+      });
+      // Add sub's main file as a version entry
+      if (sub.driveFileId && !main.versions.some(mv => mv.driveFileId === sub.driveFileId)) {
+        main.versions.push({
+          type: sub.status === 'active' ? 'final' : 'draft',
+          name: sub.name,
+          driveFileId: sub.driveFileId,
+          driveFileName: sub.driveFileName || sub.name,
+          addedAt: new Date().toISOString().slice(0, 10),
+          mergedFromId: sub.id
+        });
+      }
+    });
+
+    const updated = contracts.filter(c => !toRemove.has(c.id));
+    await db.collection('cms').doc('contracts').set({ data: updated });
+    res.json({ ok: true, removed: subIds.length, remaining: updated.length });
+  } catch(e) {
+    console.error('merge-contracts error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── 启动 ─────────────────────────────────────────────────
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
