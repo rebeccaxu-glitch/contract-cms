@@ -1921,16 +1921,24 @@ function renderContracts(){
     var nmSp=document.createElement('span');nmSp.textContent=c.name;nmSp.style.cssText='font-weight:600;color:var(--text);';
     var cidDiv=mk('div','cid',c.id);cidDiv.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;';
     c1.appendChild(fileIconSp);c1.appendChild(nmSp);c1.appendChild(cidDiv);
-    // "No signed copy" badge
-    if(!hasSignedVersion(c)){
-      var unsignedBadge=mk('span','','⚠ No signed copy');
-      unsignedBadge.style.cssText='font-size:10px;padding:1px 6px;border-radius:6px;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;margin-top:3px;display:inline-block;';
+    // "No signed copy" badge (dismissable)
+    if(!hasSignedVersion(c) && !c.dismissedNoSigned){
+      var unsignedBadge=document.createElement('span');
+      unsignedBadge.style.cssText='font-size:10px;padding:1px 6px;border-radius:6px;background:#fff3e0;color:#e65100;border:1px solid #ffcc80;margin-top:3px;display:inline-flex;align-items:center;gap:4px;';
+      var uTxt=mk('span','','⚠ No signed copy');
+      var uX=mk('span','','✕');uX.style.cssText='cursor:pointer;opacity:0.6;font-size:9px;';
+      (function(cid){uX.onclick=function(e){e.stopPropagation();var idx=C.findIndex(function(x){return x.id===cid;});if(idx>=0){C[idx].dismissedNoSigned=true;save(SK.C,C);fbSaveAll();renderContracts();}};} )(c.id);
+      unsignedBadge.appendChild(uTxt);unsignedBadge.appendChild(uX);
       c1.appendChild(unsignedBadge);
     }
-    if(dupIds.indexOf(c.id)!==-1){
-      var db=mk('span','','⚠ Duplicate');
-      db.style.cssText='font-size:10px;padding:1px 6px;border-radius:6px;background:#fff3e0;color:#f57f17;border:1px solid #ffe082;margin-top:3px;display:inline-block;cursor:pointer;';
-      db.onclick=function(e){e.stopPropagation();showDupList(c.name,c.party);};
+    // "Duplicate" badge (dismissable)
+    if(dupIds.indexOf(c.id)!==-1 && !c.dismissedDuplicate){
+      var db=document.createElement('span');
+      db.style.cssText='font-size:10px;padding:1px 6px;border-radius:6px;background:#fff3e0;color:#f57f17;border:1px solid #ffe082;margin-top:3px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;';
+      var dTxt=mk('span','','⚠ Duplicate');dTxt.onclick=function(e){e.stopPropagation();showDupList(c.name,c.party);};
+      var dX=mk('span','','✕');dX.style.cssText='cursor:pointer;opacity:0.6;font-size:9px;';
+      (function(cid){dX.onclick=function(e){e.stopPropagation();var idx=C.findIndex(function(x){return x.id===cid;});if(idx>=0){C[idx].dismissedDuplicate=true;save(SK.C,C);fbSaveAll();renderContracts();}};} )(c.id);
+      db.appendChild(dTxt);db.appendChild(dX);
       c1.appendChild(db);
     }
 
