@@ -4422,10 +4422,15 @@ function _runDriveScanWithFiles(files){
           renderDashboard(); renderContracts(); updateNavCounts(); _refreshSidebarActive();
         }).catch(function(err){
           console.error('fbLoadAll after import failed:', err);
-          location.reload(); // fallback: full reload guarantees fresh data
+          location.reload();
         });
       }
-      if(tp > 0) renderTplList();
+      // Always sync templates to Firestore and re-render if any template files were touched
+      // (including skipped ones — ensures Firestore stays in sync with localStorage T)
+      if(tp > 0 || sk > 0){
+        if(fbReady && fbDb) fbDb.collection('cms').doc('templates').set({ data: T });
+        renderTplList();
+      }
       return;
     }
     var f = files[i];
