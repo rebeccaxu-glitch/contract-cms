@@ -4374,6 +4374,7 @@ function _runDriveScanWithFiles(files){
   var prog = q('di-progress'), bar = q('di-bar'), txt = q('di-prog-text'), res = q('di-result');
   prog.style.display = 'block'; bar.style.width = '0%'; res.style.display = 'none';
   var total = files.length, done = 0, added = 0, reviewing = 0, errors = 0, skipped = 0, templates = 0;
+  var errorLog = [], skipLog = [];
   txt.textContent = '正在处理 0 / ' + total + '…';
 
   function processNext(i){
@@ -4381,6 +4382,20 @@ function _runDriveScanWithFiles(files){
       diScanning = false;
       prog.style.display = 'none';
       var a=added, rv=reviewing, e=errors, sk=skipped, tp=templates;
+      // Build detail lists for skipped and errored files
+      var detailHtml = '';
+      if(skipLog.length){
+        detailHtml += '<details style="margin-top:10px;font-size:11px;"><summary style="cursor:pointer;color:var(--text2);font-weight:600;">Skipped ('+skipLog.length+')</summary>'
+          +'<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">'
+          +skipLog.map(function(x){return '<span style="color:var(--text3);">· '+x.name+' <em>('+x.reason+')</em></span>';}).join('')
+          +'</div></details>';
+      }
+      if(errorLog.length){
+        detailHtml += '<details style="margin-top:6px;font-size:11px;" open><summary style="cursor:pointer;color:var(--red);font-weight:600;">Errors ('+errorLog.length+')</summary>'
+          +'<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">'
+          +errorLog.map(function(x){return '<span style="color:var(--red);">· '+x.name+' — '+x.reason+'</span>';}).join('')
+          +'</div></details>';
+      }
       res.style.display = 'block';
       res.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">✅ 完成！</div>'
         +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">'
@@ -4389,7 +4404,8 @@ function _runDriveScanWithFiles(files){
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#7c5cbf;">'+tp+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Templates</div></div>'
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--text3);">'+sk+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Skipped</div></div>'
         +'<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--red);">'+e+'</div><div style="font-size:10px;color:var(--text3);margin-top:2px;">Errors</div></div>'
-        +'</div>';
+        +'</div>'
+        + detailHtml;
       if(a + rv > 0){
         fbLoadAll().then(function(){
           // Reset all filters so newly imported contracts are visible
@@ -4411,7 +4427,9 @@ function _runDriveScanWithFiles(files){
     // Route Template-prefixed files to Templates section (client-side, no server call)
     if(!f.isFolder && _isTemplateName(f.name)){
       var tr = _importDriveTemplate(f);
-      if(tr.skipped) skipped++; else if(tr.ok) templates++; else errors++;
+      if(tr.skipped){ skipped++; skipLog.push({name:f.name, reason:'已导入过'}); }
+      else if(tr.ok) templates++;
+      else { errors++; errorLog.push({name:f.name, reason:'Template 处理失败'}); }
       done++; processNext(i+1); return;
     }
 
@@ -4423,16 +4441,17 @@ function _runDriveScanWithFiles(files){
       url = '/api/drive/process';
       body = JSON.stringify({ fileId: f.id, fileName: f.name, mimeType: f.mimeType });
     }
+    var _fname = f.name; // capture for closure
     fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: body })
       .then(function(r){ return r.json(); }).then(function(r){
-        if(r.skipped||r.action==='skipped') skipped++;
+        if(r.skipped||r.action==='skipped'){ skipped++; skipLog.push({name:_fname, reason: r.reason||'已存在'}); }
         else if(r.action==='added'){ if(r.status==='active') added++; else reviewing++; }
         else if(r.action==='upgraded') added++;
         else if(r.action==='version_added') reviewing++;
-        else if(!r.ok) errors++;
+        else if(!r.ok){ errors++; errorLog.push({name:_fname, reason: r.error||'服务器错误'}); }
         done++;
         processNext(i+1);
-      }).catch(function(){ errors++; done++; processNext(i+1); });
+      }).catch(function(err){ errors++; errorLog.push({name:_fname, reason: err&&err.message?err.message:'网络错误'}); done++; processNext(i+1); });
   }
   processNext(0);
 }
