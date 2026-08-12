@@ -1869,7 +1869,8 @@ function renderContracts(){
   var base=curFilter==='all'?C:curFilter==='active'?active:curFilter==='expiring'?expiring:curFilter==='unsigned'?unsigned:expired;
 
   // Apply view filter first
-  var filtered=base;
+  // Hide version children — they are grouped under their parent in the list
+  var filtered=base.filter(function(c){ return !c.isVersion; });
   if(curView==='external')filtered=filtered.filter(function(c){return!isIntercompanyContract(c);});
   if(curView==='intercompany')filtered=filtered.filter(function(c){return isIntercompanyContract(c);});
 
@@ -1936,6 +1937,46 @@ function renderContracts(){
     var nmSp=document.createElement('span');nmSp.textContent=c.name;nmSp.style.cssText='font-weight:600;color:var(--text);';
     var cidDiv=mk('div','cid',c.id);cidDiv.style.cssText='font-size:10px;color:var(--text3);margin-top:1px;';
     c1.appendChild(fileIconSp);c1.appendChild(nmSp);c1.appendChild(cidDiv);
+    // "Versions" badge — show grouped children
+    if(c.childIds && c.childIds.length){
+      var vBadge=document.createElement('span');
+      vBadge.style.cssText='font-size:10px;padding:1px 7px;border-radius:6px;background:var(--accent)22;color:var(--accent);border:1px solid var(--accent)44;margin-top:3px;display:inline-block;cursor:pointer;font-weight:600;';
+      vBadge.textContent='📎 '+c.childIds.length+' 个版本';
+      vBadge.title='点击展开 / 收起版本合同';
+      (function(cid, rowEl){
+        vBadge.onclick=function(e){
+          e.stopPropagation();
+          var existing=rowEl.nextSibling;
+          if(existing && existing.dataset && existing.dataset.versionsFor===cid){
+            existing.remove(); return;
+          }
+          var parent=C.find(function(x){return x.id===cid;});
+          if(!parent) return;
+          var vPanel=document.createElement('div');
+          vPanel.dataset.versionsFor=cid;
+          vPanel.style.cssText='border-left:3px solid var(--accent);margin:0;padding:4px 0 4px 24px;background:var(--surface2);';
+          (parent.childIds||[]).forEach(function(vid){
+            var vc=C.find(function(x){return x.id===vid;});
+            if(!vc) return;
+            var vRow=document.createElement('div');
+            vRow.style.cssText='display:grid;grid-template-columns:'+getColGrid()+';gap:6px;padding:6px 16px;border-top:1px solid var(--border);align-items:center;font-size:12px;cursor:pointer;opacity:0.85;';
+            vRow.onclick=function(){openContractDetail(vc.id);};
+            var vn=document.createElement('div');
+            vn.innerHTML='<span style="font-size:10px;color:var(--text3);">↳ 版本 </span><span style="font-weight:600;color:var(--text);">'+vc.name+'</span><div style="font-size:10px;color:var(--text3);">'+vc.id+'</div>';
+            var ve=mk('div','',vc.entity||'—');ve.style.cssText='font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            var vp=mk('div',(vc.party||vc.counterparty||'—'));vp.style.cssText='color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;';
+            var vt=mk('div',vc.type||'—');vt.style.cssText='color:var(--text2);font-size:12px;';
+            var vs=mk('div',vc.start||vc.startDate||'—');vs.style.cssText='color:var(--text2);font-size:11px;';
+            var vend=mk('div',vc.end||vc.endDate||'—');vend.style.cssText='color:var(--text2);font-size:11px;';
+            // Fill remaining columns with empty divs to maintain grid alignment
+            [vn,ve,vp,vt,vs,vend,mk('div','',''),mk('div','',''),mk('div','',''),mk('div','','')].forEach(function(d){vRow.appendChild(d);});
+            vPanel.appendChild(vRow);
+          });
+          rowEl.parentNode.insertBefore(vPanel, rowEl.nextSibling);
+        };
+      })(c.id, row);
+      c1.appendChild(vBadge);
+    }
     // "No signed copy" badge (dismissable)
     if(!hasSignedVersion(c) && !c.dismissedNoSigned){
       var unsignedBadge=document.createElement('span');
@@ -4804,6 +4845,14 @@ function doMerge(mainId, subIds, cardId, mergeBtn){
   .then(function(r){ return r.json(); })
   .then(function(d){
     if(!d.ok) throw new Error(d.error || 'merge failed');
+    // Immediately update local C for instant feedback (no waiting for Firebase)
+    C.forEach(function(c){
+      if(c.id === mainId){ c.childIds = subIds; c.hasVersions = true; }
+      if(subIds.indexOf(c.id) > -1){ c.parentId = mainId; c.isVersion = true; }
+    });
+    save(SK.C, C);
+    renderContracts(); updateNavCounts(); _refreshSidebarActive();
+    // Visual feedback on the card
     var card = document.getElementById(cardId);
     if(card){
       card.style.border = '1.5px solid var(--green)';
@@ -4811,14 +4860,12 @@ function doMerge(mainId, subIds, cardId, mergeBtn){
       card.style.pointerEvents = 'none';
       var ok = document.createElement('div');
       ok.style.cssText = 'text-align:center;color:var(--green);font-size:13px;font-weight:600;padding:6px 0;';
-      ok.textContent = '✅ 已合并，删除 ' + subIds.length + ' 个重复合同';
+      ok.textContent = '✅ 已归组，' + subIds.length + ' 个版本已并入主合同';
       card.appendChild(ok);
     }
-    // Reload contracts from Firestore
+    // Background sync with Firestore
     if(fbReady && fbDb){
-      fbLoadAll().then(function(){
-        renderContracts(); updateNavCounts(); _refreshSidebarActive();
-      }).catch(function(){ location.reload(); });
+      fbLoadAll().then(function(){ renderContracts(); updateNavCounts(); }).catch(function(){});
     }
   })
   .catch(function(e){

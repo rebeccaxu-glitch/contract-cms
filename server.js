@@ -1131,33 +1131,20 @@ app.post('/api/merge-contracts', async (req, res) => {
     const main = contracts.find(c => c.id === mainId);
     if (!main) return res.status(404).json({ error: 'Main contract not found' });
 
-    if (!main.versions) main.versions = [];
     const toRemove = new Set(subIds);
-
+    // Mark main contract with its children
+    main.childIds = subIds;
+    main.hasVersions = true;
+    // Mark each sub-contract as a version child (not deleted — just hidden in list)
     subIds.forEach(subId => {
       const sub = contracts.find(c => c.id === subId);
       if (!sub) return;
-      // Absorb sub's existing versions
-      (sub.versions || []).forEach(v => {
-        if (!main.versions.some(mv => mv.driveFileId && mv.driveFileId === v.driveFileId))
-          main.versions.push({ ...v, mergedFromId: sub.id });
-      });
-      // Add sub's main file as a version entry
-      if (sub.driveFileId && !main.versions.some(mv => mv.driveFileId === sub.driveFileId)) {
-        main.versions.push({
-          type: sub.status === 'active' ? 'final' : 'draft',
-          name: sub.name,
-          driveFileId: sub.driveFileId,
-          driveFileName: sub.driveFileName || sub.name,
-          addedAt: new Date().toISOString().slice(0, 10),
-          mergedFromId: sub.id
-        });
-      }
+      sub.parentId = mainId;
+      sub.isVersion = true;
     });
 
-    const updated = contracts.filter(c => !toRemove.has(c.id));
-    await db.collection('cms').doc('contracts').set({ data: updated });
-    res.json({ ok: true, removed: subIds.length, remaining: updated.length });
+    await db.collection('cms').doc('contracts').set({ data: contracts });
+    res.json({ ok: true, grouped: subIds.length, total: contracts.length });
   } catch(e) {
     console.error('merge-contracts error:', e);
     res.status(500).json({ error: e.message });
