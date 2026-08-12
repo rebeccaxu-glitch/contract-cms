@@ -2027,10 +2027,11 @@ function renderContracts(){
     var c5=mk('div','',_end||'—');c5.style.cssText='font-size:11px;'+(isExpired?'color:var(--red);':(isExpiring?'color:var(--orange);font-weight:600;':'color:var(--text2);'));
 
     var c6=document.createElement('div');c6.style.cssText='display:flex;align-items:center;gap:3px;';
-    var feesTxt=_fees||'—';
-    var feesSpan=document.createElement('span');feesSpan.innerHTML=feesTxt;
-    feesSpan.title=_fees||'';
-    feesSpan.style.cssText='flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4;';
+    var feesTxt=_shortFees(_fees);
+    var feesSpan=document.createElement('span');
+    if(curSearch){feesSpan.innerHTML=_hlText(feesTxt,curSearch);}else{feesSpan.textContent=feesTxt;}
+    feesSpan.title=_fees||''; // full text on hover
+    feesSpan.style.cssText='flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2);';
     var feesEdit=mk('span','inline-edit-btn','✎');
     feesEdit.onclick=(function(id){return function(e){e.stopPropagation();inlineEdit(this,'fees',id);};})(c.id);
     c6.appendChild(feesSpan);c6.appendChild(feesEdit);
@@ -5366,6 +5367,26 @@ function _hlText(text, q){
     esc=esc.replace(re,'<mark style="background:#fff176;color:inherit;border-radius:2px;padding:0 1px;">$1</mark>');
   });
   return esc;
+}
+
+// Compact fee/value display — extract first monetary amount or percentage
+function _shortFees(s){
+  if(!s) return '—';
+  s=s.trim();
+  // Currency + number (e.g. "SGD 840-1,500/month" or "USD 9,000")
+  var m=s.match(/(USD|SGD|MYR|CNY|HKD|AUD|GBP|EUR|TWD|JPY|INR)\s*([\d,]+(?:\.\d+)?)(?:\s*[-–~]\s*([\d,]+(?:\.\d+)?))?(?:\s*\/\s*(\w+))?/i);
+  if(m){
+    var cur=m[1].toUpperCase();
+    var lo=m[2];
+    var hi=m[3];
+    var per=m[4]?'/'+m[4].toLowerCase().replace(/month/,'mo').replace(/year/,'yr'):'';
+    return cur+' '+(hi?lo+'–'+hi:lo)+per;
+  }
+  // Percentage (e.g. "15% of salary")
+  var pm=s.match(/(\d+(?:\.\d+)?%(?:\s*[-–~]\s*\d+(?:\.\d+)?%)?)/);
+  if(pm) return pm[1];
+  // Fallback: first 30 chars
+  return s.length>30?s.slice(0,30)+'…':s;
 }
 
 // Multi-keyword + field-prefix search
