@@ -200,60 +200,34 @@ app.post('/api/ai/analyze', express.json({ limit: '30mb' }), async (req, res) =>
 //  实体注册表 & Brand 解析
 // ══════════════════════════════════════════════════════════
 
-// All known entities across all brands.
-// coreWords: normalized keywords that uniquely identify this entity (order matters — more specific first)
-// jurisdictionAliases: required when multiple entities share the same name (e.g. Anzo Capital Limited BZ vs KE)
-// disambiguate: optional pipe-separated terms to pick between entities sharing the same coreWords
+// Brand-level entity registry — no sub-entity distinction.
+// keywords: any of these appearing in the extracted ourEntity text → brand is matched.
+// entityNames: full legal names sent to Claude as hints so it can identify "our side".
 const ENTITY_REGISTRY = [
-  // ── Orbitlabs ──────────────────────────────────────────
-  { brand:'orbitlabs', name:'Orbitlabs Pte. Ltd.',               flag:'🇸🇬', coreWords:['orbitlabs'] },
-  { brand:'orbitlabs', name:'深圳市星轨实验科技有限公司',            flag:'🇨🇳', coreWords:['星轨实验','星轨','xinggui'] },
-  { brand:'orbitlabs', name:'星應有限公司',                         flag:'🇹🇼', coreWords:['星應','xing ying','xingying'] },
-  { brand:'orbitlabs', name:'Orbitlabs Services Aust',            flag:'🇦🇺', coreWords:['orbitlabs'], disambiguate:'aust|australia' },
-
-  // ── Techntea ───────────────────────────────────────────
-  { brand:'techntea',  name:'Techntea Pte. Ltd.',                 flag:'🇸🇬', coreWords:['techntea'] },
-
-  // ── Anzo ──────────────────────────────────────────────
-  { brand:'anzo', name:'Anzo Holding Limited',                    flag:'🇭🇰', coreWords:['anzo holding'] },
-  { brand:'anzo', name:'Anzo Capital (Int.) Pty Ltd',             flag:'🇲🇺', coreWords:['anzo capital'], disambiguate:'int|mauritius|mu' },
-  { brand:'anzo', name:'Anzo Capital (Aust) Pty Ltd',             flag:'🇦🇺', coreWords:['anzo capital'], disambiguate:'aust|australia' },
-  { brand:'anzo', name:'Anzo Capital (SVG) LLC',                  flag:'🏳️',  coreWords:['anzo capital'], disambiguate:'svg|vincent|grenadines' },
-  { brand:'anzo', name:'ANZO CAPITAL GLOBAL LIMITED',             flag:'🇻🇺', coreWords:['anzo capital global','anzocapital global'] },
-  { brand:'anzo', name:'ANZOCAP NIGERIA LIMITED',                 flag:'🇳🇬', coreWords:['anzocap','anzo nigeria'] },
-  // Same name, different jurisdiction — require jurisdiction match
-  { brand:'anzo', name:'Anzo Capital Limited (BZ)',               flag:'🇧🇿', coreWords:['anzo capital limited'], jurisdictionAliases:['belize','bz','belizean'] },
-  { brand:'anzo', name:'Anzo Capital Limited (KE)',               flag:'🇰🇪', coreWords:['anzo capital limited'], jurisdictionAliases:['kenya','ke','kenyan','nairobi'] },
-
-  // ── DLSM ──────────────────────────────────────────────
-  { brand:'dlsm', name:'DLS Markets Limited',                     flag:'🇻🇺', coreWords:['dls markets'] },
-  { brand:'dlsm', name:'DLS Markets (International) Pty Ltd',     flag:'🇰🇾', coreWords:['dls markets'], disambiguate:'international|cayman|ky' },
-  { brand:'dlsm', name:'DLS Markets (Aust) Pty Ltd',              flag:'🇦🇺', coreWords:['dls markets'], disambiguate:'aust|australia' },
-  { brand:'dlsm', name:'Long Leading Services Sdn. Bhd.',         flag:'🇲🇾', coreWords:['long leading'], disambiguate:'sdn|bhd|malaysia|my' },
-  { brand:'dlsm', name:'LONG LEADING SERVICES PTY LTD',          flag:'🇦🇺', coreWords:['long leading'], disambiguate:'pty|aust|australia' },
-
-  // ── TTG ───────────────────────────────────────────────
-  { brand:'ttg', name:'ThreeTrader Global (MU) Pty Ltd',          flag:'🇲🇺', coreWords:['threetrader global','three trader global'], disambiguate:'mu|mauritius' },
-  { brand:'ttg', name:'ThreeTrader Global Limited',               flag:'🇻🇺', coreWords:['threetrader global','three trader global'] },
-  { brand:'ttg', name:'THREETRADER (V) LIMITED',                  flag:'🇻🇺', coreWords:['threetrader','three trader'], disambiguate:'vanuatu|vu' },
-  { brand:'ttg', name:'ThreeTrader Limited',                      flag:'🇻🇬', coreWords:['threetrader','three trader'] },
-  { brand:'ttg', name:'TTG HOLDING (SG) Pte. Ltd.',               flag:'🇸🇬', coreWords:['ttg holding','ttg'] },
-  { brand:'ttg', name:'TTG AU PTY LTD',                           flag:'🇦🇺', coreWords:['ttg'], disambiguate:'au|aust|australia' },
-  { brand:'ttg', name:'Lian Mei Global Company Limited',          flag:'🇹🇼', coreWords:['lian mei','联美','lianmei'] },
-
-  // ── Oqtima ────────────────────────────────────────────
-  { brand:'oqtima', name:'OQTIMA GLOBAL LIMITED',                 flag:'🇭🇰', coreWords:['oqtima global','oqtima'] },
-  { brand:'oqtima', name:'Oqtima Int. Ltd',                       flag:'🇸🇨', coreWords:['oqtima'] },
-  { brand:'oqtima', name:'Ipso Facto Ltd',                        flag:'🇨🇾', coreWords:['ipso facto'] },
-  { brand:'oqtima', name:'AD Maiora Holding Limited',             flag:'🇨🇾', coreWords:['ad maiora','admaiora'] },
-  { brand:'oqtima', name:'PLATICA SERVICES LIMITED',              flag:'🇨🇾', coreWords:['platica'] },
-
-  // ── Lime Up ───────────────────────────────────────────
-  { brand:'limeup', name:'Next Mango Pte. Ltd.',                  flag:'🇸🇬', coreWords:['next mango','nextmango'] },
-  { brand:'limeup', name:'Lime Up Services',                      flag:'🌐',  coreWords:['lime up','limeup'] },
-
-  // ── Paypaz ────────────────────────────────────────────
-  { brand:'paypaz', name:'Magic Papaya Pte. Ltd.',                flag:'🇸🇬', coreWords:['magic papaya','magicpapaya','paypaz'] },
+  { brand:'orbitlabs', name:'Orbitlabs', flag:'🟢',
+    keywords:['orbitlabs','星轨','星應','xingying','xinggui'],
+    entityNames:['Orbitlabs Pte. Ltd.','深圳市星轨实验科技有限公司','星應有限公司','Orbitlabs Services Aust'] },
+  { brand:'techntea', name:'Techntea', flag:'🔵',
+    keywords:['techntea'],
+    entityNames:['Techntea Pte. Ltd.'] },
+  { brand:'anzo', name:'Anzo', flag:'🟠',
+    keywords:['anzo','anzocap'],
+    entityNames:['Anzo Holding Limited','Anzo Capital (Int.) Pty Ltd','Anzo Capital (Aust) Pty Ltd','Anzo Capital (SVG) LLC','ANZO CAPITAL GLOBAL LIMITED','ANZOCAP NIGERIA LIMITED','Anzo Capital Limited'] },
+  { brand:'dlsm', name:'DLSM', flag:'🟣',
+    keywords:['dls markets','long leading'],
+    entityNames:['DLS Markets Limited','DLS Markets (International) Pty Ltd','DLS Markets (Aust) Pty Ltd','Long Leading Services Sdn. Bhd.','LONG LEADING SERVICES PTY LTD'] },
+  { brand:'ttg', name:'TTG', flag:'🔴',
+    keywords:['threetrader','three trader','ttg','lian mei','联美','lianmei'],
+    entityNames:['ThreeTrader Global (MU) Pty Ltd','ThreeTrader Global Limited','THREETRADER (V) LIMITED','ThreeTrader Limited','TTG HOLDING (SG) Pte. Ltd.','TTG AU PTY LTD','Lian Mei Global Company Limited'] },
+  { brand:'oqtima', name:'Oqtima', flag:'🟡',
+    keywords:['oqtima','ipso facto','ipsofacto','ad maiora','admaiora','platica'],
+    entityNames:['OQTIMA GLOBAL LIMITED','Oqtima Int. Ltd','Ipso Facto Ltd','AD Maiora Holding Limited','PLATICA SERVICES LIMITED'] },
+  { brand:'limeup', name:'Lime Up', flag:'🌐',
+    keywords:['lime up','limeup','next mango','nextmango'],
+    entityNames:['Next Mango Pte. Ltd.','Lime Up Services'] },
+  { brand:'paypaz', name:'Paypaz', flag:'💳',
+    keywords:['paypaz','magic papaya','magicpapaya'],
+    entityNames:['Magic Papaya Pte. Ltd.'] },
 ];
 
 // Normalize a string for matching: lowercase, strip punctuation/common suffixes, collapse spaces
@@ -276,63 +250,23 @@ function autoGenCoreWords(entityName) {
   return [...new Set(coreWords)].filter(Boolean);
 }
 
-// Build merged entity registry: hardcoded ENTITY_REGISTRY + dynamic brands from Firestore
+// Build entity registry: static ENTITY_REGISTRY only (brand-level, no sub-entity)
 async function getEntityRegistry() {
-  let registry = [...ENTITY_REGISTRY];
-  try {
-    const brandsDoc = await db.collection('cms').doc('brands').get();
-    if (brandsDoc.exists) {
-      const brands = brandsDoc.data().data || [];
-      for (const brand of brands) {
-        for (const ent of (brand.entities || [])) {
-          if (!registry.some(r => r.name === ent.name)) {
-            const coreWords = autoGenCoreWords(ent.name);
-            if (coreWords.length > 0) {
-              registry.push({ brand: brand.key, name: ent.name, flag: ent.flag || '', coreWords });
-            }
-          }
-        }
-      }
-    }
-  } catch(e) {
-    console.warn('getEntityRegistry fallback to static:', e.message);
-  }
-  return registry;
+  return [...ENTITY_REGISTRY];
 }
 
-// Resolve entity name + optional jurisdiction → { brand, entity } or null
+// Resolve entity name → { brand, entity } or null
+// Matches against brand-level keywords; returns brand name (no sub-entity distinction).
 function resolveEntityInfo(entityName, jurisdiction, registry) {
   if (!entityName || !entityName.trim()) return null;
   const ni = normStr(entityName);
-  const nj = normStr(jurisdiction || '');
   const reg = registry || ENTITY_REGISTRY;
-
-  let bestMatch = null, bestScore = 0;
-
-  for (const ent of reg) {
-    // 1. Check core word match (first match wins for same score)
-    const cw = ent.coreWords.find(w => ni.includes(normStr(w)));
-    if (!cw) continue;
-    let score = cw.length; // longer match = more specific
-
-    // 2. Jurisdiction is REQUIRED for entries with jurisdictionAliases
-    if (ent.jurisdictionAliases) {
-      const jurisHit = ent.jurisdictionAliases.some(a => ni.includes(a) || nj.includes(a));
-      if (!jurisHit) continue;
-      score += 20;
-    }
-
-    // 3. Disambiguation bonus (not required, just boosts score)
-    if (ent.disambiguate) {
-      const terms = ent.disambiguate.split('|');
-      if (terms.some(t => ni.includes(t) || nj.includes(t))) score += 10;
-    }
-
-    if (score > bestScore) { bestScore = score; bestMatch = ent; }
+  for (const entry of reg) {
+    const kws = entry.keywords || entry.coreWords || [];
+    const hit = kws.find(kw => ni.includes(normStr(kw)));
+    if (hit) return { brand: entry.brand, entity: entry.name };
   }
-
-  if (!bestMatch) return null;
-  return { brand: bestMatch.brand, entity: bestMatch.name };
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -350,7 +284,9 @@ function getDriveClient() {
 
 // Known entity names used in the AI prompt so Claude can distinguish "our" side from counterparty
 function _ourEntityNames() {
-  return ENTITY_REGISTRY.map(function(e){ return e.name; }).join(', ');
+  const names = [];
+  ENTITY_REGISTRY.forEach(e => names.push(...(e.entityNames || [e.name])));
+  return names.join(', ');
 }
 
 async function extractWithClaude(fileBuffer, mimeType, fileName) {
@@ -1090,6 +1026,7 @@ app.post('/api/find-duplicates', async (req, res) => {
           body
         });
         const data = await resp.json();
+        if (data.usage) console.log(`[dedup] tokens: in=${data.usage.input_tokens} out=${data.usage.output_tokens}`);
         const text = (data.content && data.content[0] && data.content[0].text) || '';
         const m = text.match(/\{[\s\S]*\}/);
         if (m) {
