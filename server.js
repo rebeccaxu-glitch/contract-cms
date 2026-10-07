@@ -208,8 +208,8 @@ const ENTITY_REGISTRY = [
     keywords:['orbitlabs','星轨','星應','xingying','xinggui'],
     entityNames:['Orbitlabs Pte. Ltd.','深圳市星轨实验科技有限公司','星應有限公司','Orbitlabs Services Aust'] },
   { brand:'techntea', name:'Techntea', flag:'🔵',
-    keywords:['techntea'],
-    entityNames:['Techntea Pte. Ltd.'] },
+    keywords:['techntea','bdytech','toocans','techxtea'],
+    entityNames:['Techntea Pte. Ltd.','Bdytech Pty Ltd','Toocans Capital (EU) s.r.o','TechXtea Services Limited'] },
   { brand:'anzo', name:'Anzo', flag:'🟠',
     keywords:['anzo','anzocap'],
     entityNames:['Anzo Holding Limited','Anzo Capital (Int.) Pty Ltd','Anzo Capital (Aust) Pty Ltd','Anzo Capital (SVG) LLC','ANZO CAPITAL GLOBAL LIMITED','ANZOCAP NIGERIA LIMITED','Anzo Capital Limited'] },
@@ -286,8 +286,9 @@ function canonicaliseOurEntity(aiEntityName, registry) {
     const knownNames = entry.entityNames || [];
     const alreadyFull = knownNames.find(n => normStr(n) === ni || normStr(n).includes(ni));
     if (alreadyFull) return aiEntityName; // already specific enough
-    // One known entity → safe to canonicalise; multiple → default to first (e.g. Orbitlabs Pte. Ltd.)
-    return knownNames[0] || aiEntityName;
+    // One known entity → canonicalise; multiple → keep AI result (AI should have picked the right one)
+    if (knownNames.length === 1) return knownNames[0];
+    return aiEntityName;
   }
   return aiEntityName;
 }
@@ -305,11 +306,12 @@ function getDriveClient() {
   return google.drive({ version: 'v3', auth });
 }
 
-// Known entity names used in the AI prompt so Claude can distinguish "our" side from counterparty
+// Known entity names used in the AI prompt — grouped by brand so AI picks the most specific legal name
 function _ourEntityNames() {
-  const names = [];
-  ENTITY_REGISTRY.forEach(e => names.push(...(e.entityNames || [e.name])));
-  return names.join(', ');
+  return ENTITY_REGISTRY.map(e => {
+    const names = (e.entityNames || [e.name]).join(' | ');
+    return `[${e.name}]: ${names}`;
+  }).join('\n');
 }
 
 async function extractWithClaude(fileBuffer, mimeType, fileName) {
@@ -341,17 +343,17 @@ async function extractWithClaude(fileBuffer, mimeType, fileName) {
     text: `Filename: "${fileName}"
 ${fileHint}
 
-Our company group entities (for reference — these are all "our" side):
+Our company group entities (grouped by brand — ALL of these are "our" side):
 ${ourEntities}
 
 IMPORTANT rules for party identification:
-- Identify ALL parties named in the contract first.
-- Check each party name against the "Our company group entities" list above (including partial matches like brand names).
-- "ourEntity" = whichever party belongs to our group. Extract its exact legal name as written in the document.
-- "counterparty" = the other main party. Extract its exact legal name as written.
-- CRITICAL: If BOTH parties appear in our group entity list above, this is an intercompany contract — set type="intercompany". This is common for service agreements, loans, or IP licences between our own subsidiaries.
-- type="external" ONLY when the counterparty is clearly a company outside our group.
-- If you cannot clearly identify our entity, set ourEntity=null and counterparty=the main external party name.
+- Read the contract and identify all named parties.
+- For each party, check if it matches any entity in the list above (by full name, partial name, or brand keyword).
+- "ourEntity": if a party matches our group, return its EXACT legal name as written in the contract (e.g. "深圳市星轨实验科技有限公司", not just "Orbitlabs"). If the contract only mentions a brand name without a specific legal entity, return that brand name.
+- "counterparty": the other main party's exact legal name as written. Must be outside our group.
+- CRITICAL — intercompany: if BOTH parties belong to our group (even from different brands), set type="intercompany". Common for service agreements, loans, secondment or IP licences between our own subsidiaries.
+- type="external" ONLY when counterparty is clearly outside our group.
+- If you cannot identify our entity, set ourEntity=null.
 
 Analyse this contract and return ONLY a valid JSON object (no markdown, no explanation):
 {
