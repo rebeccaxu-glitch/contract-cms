@@ -269,6 +269,29 @@ function resolveEntityInfo(entityName, jurisdiction, registry) {
   return null;
 }
 
+// Canonicalise an AI-extracted ourEntity name:
+// If AI returned just a brand keyword (e.g. "Techntea", "Orbitlabs") without a full legal name,
+// and the matched brand has exactly ONE known entityName, use that canonical name.
+// If multiple entityNames exist we cannot auto-pick, so keep the AI result.
+function canonicaliseOurEntity(aiEntityName, registry) {
+  if (!aiEntityName || !aiEntityName.trim()) return aiEntityName;
+  const ni = normStr(aiEntityName);
+  const reg = registry || ENTITY_REGISTRY;
+  for (const entry of reg) {
+    // Check if it matches this brand's keywords
+    const kws = entry.keywords || [];
+    const hit = kws.find(kw => ni.includes(normStr(kw)));
+    if (!hit) continue;
+    // Check if the name is already a known full legal entity name (case-insensitive)
+    const knownNames = entry.entityNames || [];
+    const alreadyFull = knownNames.find(n => normStr(n) === ni || normStr(n).includes(ni));
+    if (alreadyFull) return aiEntityName; // already specific enough
+    // One known entity → safe to canonicalise; multiple → default to first (e.g. Orbitlabs Pte. Ltd.)
+    return knownNames[0] || aiEntityName;
+  }
+  return aiEntityName;
+}
+
 // ══════════════════════════════════════════════════════════
 //  Google Drive 扫描
 // ══════════════════════════════════════════════════════════
@@ -322,9 +345,12 @@ Our company group entities (for reference — these are all "our" side):
 ${ourEntities}
 
 IMPORTANT rules for party identification:
-- "ourEntity" = the party that belongs to our company group (listed above). Extract its exact legal name as written in the document.
-- "counterparty" = the OTHER party — always a company OUTSIDE our group. NEVER set counterparty to the same entity as ourEntity.
-- If BOTH parties are from our group (intercompany), set type="intercompany", ourEntity = one side, counterparty = the other.
+- Identify ALL parties named in the contract first.
+- Check each party name against the "Our company group entities" list above (including partial matches like brand names).
+- "ourEntity" = whichever party belongs to our group. Extract its exact legal name as written in the document.
+- "counterparty" = the other main party. Extract its exact legal name as written.
+- CRITICAL: If BOTH parties appear in our group entity list above, this is an intercompany contract — set type="intercompany". This is common for service agreements, loans, or IP licences between our own subsidiaries.
+- type="external" ONLY when the counterparty is clearly a company outside our group.
 - If you cannot clearly identify our entity, set ourEntity=null and counterparty=the main external party name.
 
 Analyse this contract and return ONLY a valid JSON object (no markdown, no explanation):
@@ -529,14 +555,18 @@ async function processOneDriveFile(fileId, fileName, mimeType) {
   const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction, registry)
     || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction, registry);
 
+  // Server-side intercompany fallback: if AI said "external" but both parties are in our registry, override
+  const cpResolved = resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction, registry);
+  const isIntercompany = x.type === 'intercompany' || (!!(resolved) && !!(cpResolved));
+
   // New contract record — field names match frontend expectations
   const record = {
     id: makeContractId(x.startDate, contracts),
     name: x.name || fileName.replace(/\.[^.]+$/, ''),
     party: x.counterparty || '',          // frontend reads c.party
-    entity: (resolved && resolved.entity) || x.ourEntity || '',
+    entity: canonicaliseOurEntity(x.ourEntity, registry) || (resolved && resolved.entity) || '',
     brand: (resolved && resolved.brand) || null,
-    isIntercompany: x.type === 'intercompany',
+    isIntercompany,
     type: x.contractType || '',           // frontend shows c.type as contract type label
     start: x.startDate || '',
     end: x.endDate || '',
@@ -715,6 +745,8 @@ app.post('/api/drive/process-folder', async (req, res) => {
     const registry = await getEntityRegistry();
     const resolved = resolveEntityInfo(x.ourEntity, x.ourEntityJurisdiction, registry)
       || resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction, registry);
+    const cpResolved2 = resolveEntityInfo(x.counterparty, x.counterpartyJurisdiction, registry);
+    const isIntercompany2 = x.type === 'intercompany' || (!!(resolved) && !!(cpResolved2));
 
     // Build versions: signed = 签署版 (final), others classified by filename keywords
     const versions = folderFiles.map(f => {
@@ -736,9 +768,9 @@ app.post('/api/drive/process-folder', async (req, res) => {
       id: makeContractId(x.startDate, contracts),
       name: folderName,
       party: x.counterparty || '',
-      entity: (resolved && resolved.entity) || x.ourEntity || '',
+      entity: canonicaliseOurEntity(x.ourEntity, registry) || (resolved && resolved.entity) || '',
       brand: (resolved && resolved.brand) || null,
-      isIntercompany: x.type === 'intercompany',
+      isIntercompany: isIntercompany2,
       type: x.contractType || '',
       start: x.startDate || '',
       end: x.endDate || '',
