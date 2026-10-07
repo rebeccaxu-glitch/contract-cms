@@ -5383,9 +5383,9 @@ function _finishImport(backup){
 function exportExcel(){
   if(typeof XLSX==='undefined'){alert('Excel导出库未加载，请检查网络连接后重试');return;}
   var wb=XLSX.utils.book_new();
-  var cr=[['合同编号','合同名称','我方主体','对方当事人','合同类型','状态','签署日期','到期日期','合同金额','备注','版本数']];
-  C.forEach(function(c){cr.push([c.id,c.name,c.entity||'',c.party,c.type,SL[c.status]||c.status,c.start||'',c.end||'',c.amount||'',c.notes||'',(c.versions||[]).length]);});
-  var ws1=XLSX.utils.aoa_to_sheet(cr);ws1['!cols']=[10,30,22,20,12,10,12,12,14,30,6].map(function(w){return{wch:w};});
+  var cr=[['Entity','Counterparty','Contract Name','Contract Type','Start Date','End Date','Value / Fees','Notes']];
+  C.forEach(function(c){cr.push([c.entity||'',c.party||c.counterparty||'',c.name,c.type||'',c.start||'',c.end||'',c.fees||c.amount||'',c.notes||'']);});
+  var ws1=XLSX.utils.aoa_to_sheet(cr);ws1['!cols']=[24,24,36,20,12,12,18,40].map(function(w){return{wch:w};});
   XLSX.utils.book_append_sheet(wb,ws1,'合同列表');
   var er=[['集团名称','子公司名称','UEN','注册地','公司类型','备注','合同分类']];
   E.forEach(function(g){
