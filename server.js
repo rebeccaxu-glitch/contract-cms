@@ -1127,4 +1127,27 @@ if (require.main === module) {
     console.log(`✅ 合同管理系统运行中：http://localhost:${PORT}`);
   });
 }
+// POST /api/canonicalise-entities — batch-fix entity field for all existing contracts
+app.post('/api/canonicalise-entities', async (req, res) => {
+  try {
+    const registry = await getEntityRegistry();
+    const doc = await db.collection('cms').doc('contracts').get();
+    const contracts = doc.exists ? (doc.data().data || []) : [];
+    let fixed = 0;
+    const updated = contracts.map(c => {
+      const canonical = canonicaliseOurEntity(c.entity, registry);
+      if (canonical && canonical !== c.entity) {
+        fixed++;
+        return { ...c, entity: canonical };
+      }
+      return c;
+    });
+    await db.collection('cms').doc('contracts').set({ data: updated });
+    res.json({ ok: true, total: contracts.length, fixed });
+  } catch(e) {
+    console.error('canonicalise-entities error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = app;

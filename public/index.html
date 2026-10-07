@@ -304,6 +304,7 @@ textarea.form-input{resize:vertical;}
       <button class="btn btn-ghost" onclick="document.getElementById('importJSONInput').click()" title="Restore from JSON backup">📥 Import</button>
       <input type="file" id="importJSONInput" accept=".json" style="display:none" onchange="importJSON(this)">
       <button class="btn btn-ghost" onclick="exportExcel()">⬇ Excel</button>
+      <button class="btn btn-ghost" onclick="canonicaliseEntities()" title="批量修正所有合同的我方实体名称">🔧 Fix Entities</button>
       <button class="btn btn-primary" onclick="navTo('upload')">＋ Upload Contract</button>
       <div class="user-badge" id="user-badge" style="display:none;">
         <div class="user-avatar-initials" id="user-initials"></div>
@@ -5399,6 +5400,21 @@ function exportExcel(){
   var ws3=XLSX.utils.aoa_to_sheet(tr);XLSX.utils.book_append_sheet(wb,ws3,'合同模板');
   var n=new Date();var ds=n.getFullYear()+pad2(n.getMonth()+1)+pad2(n.getDate());
   XLSX.writeFile(wb,'合同管理备份_'+ds+'.xlsx');
+}
+
+// ── Batch canonicalise entity names ──────────────────────
+async function canonicaliseEntities(){
+  if(!confirm('批量修正所有合同的我方实体名称？\n（"Anzo" → "Anzo Holding Limited" 等）\n\n此操作会更新数据库，无法撤销。')) return;
+  try {
+    var r=await fetch('/api/canonicalise-entities',{method:'POST'});
+    var data=await r.json();
+    if(data.ok){
+      alert('✅ 修正完成！\n共 '+data.total+' 条合同，修正了 '+data.fixed+' 条。\n\n页面即将刷新。');
+      location.reload();
+    } else {
+      alert('❌ 修正失败：'+(data.error||'未知错误'));
+    }
+  } catch(e){ alert('❌ 请求失败：'+e.message); }
 }
 
 // ── Search helpers ───────────────────────────────────────
